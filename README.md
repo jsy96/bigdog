@@ -49,6 +49,7 @@ tools/                     开发与验证工具，不参与网页运行，发�
   find_piano_minimax.py       为超限的「样本 + 起始八度」搜索单一 minimax 锚点
   build_audio_data.mjs        从 audio/ 重建 audio-data.js 的 base64 包
   build_character_animation.mjs  把东海帝皇透明 PNG 序列压成精灵图 WebP
+  build_animation_from_mp4.mjs   把 MP4 循环动画转成 Image/{id}_atlas.webp / Image/{id}_icon.webp
   verify_runtime_mapping.mjs  提取并执行 main.js 映射函数，对照分析报告回归
   verify_interaction_queue.mjs 验证滑动补全、节奏排队与长音换调
 提示词.txt                AI 绘图提示词：照此生成符合要求的"闭嘴/张嘴"双图，用于自定义形象
@@ -131,6 +132,7 @@ Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使�
 uv run --no-project --with numpy tools/analyze_pitch.py --write-wavs   # 音高与响度分析（写报告到 tools/tmp/）
 uv run --no-project --with numpy tools/find_piano_minimax.py           # 钢琴模式 minimax 锚点搜索
 node tools/build_audio_data.mjs                                        # 重建 audio-data.js
+node tools/build_animation_from_mp4.mjs --input "Image/生成东海帝皇Q版赛马娘循环动画.mp4" --id doubao  # MP4 转动画 WebP
 node tools/verify_runtime_mapping.mjs                                  # 运行时映射回归
 node tools/verify_interaction_queue.mjs                                # 交互队列回归
 ```

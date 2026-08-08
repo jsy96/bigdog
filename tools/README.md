@@ -47,6 +47,11 @@ node tools/verify_interaction_queue.mjs
 长音的第三音节换调也进入该队列，只在当前纹理上切换播放速率而不重新播放
 开头；关闭节奏吸附后则验证每次输入都按实际按下时间立即发声且不去重。
 
+`build_animation_from_mp4.mjs` 会把一段 MP4 角色循环动画直接转换为运行时可读取的
+`Image/{id}_atlas.webp` 与 `Image/{id}_icon.webp`：默认抽取 108 帧，只保留右半边，抠除
+灰色棋盘格背景，居中放进每帧 `360 × 514` 的透明画布，再合成为 `12 × 9` 的 WebP
+精灵图。适用于 AI 视频工具导出的“假透明棋盘格背景”MP4。
+
 ## 透明角色循环动画
 
 `build_character_animation.mjs` 会把东海帝皇的 1920 × 1080 透明 PNG 序列：
@@ -56,11 +61,19 @@ node tools/verify_interaction_queue.mjs
 3. 每帧以 Lanczos 缩放到 `360 × 514`，编码为带 Alpha 的无损 WebP；
 4. 同时生成 `128 × 128` 的帝皇按钮图标，不让设置按钮重复解码整段动画。
 
-运行：
+运行（PNG 序列帧来源）：
 
 ```powershell
 node tools\build_character_animation.mjs `
   --source-directory 'M:\Videos\输出\donghaidihuang_透明背景'
+```
+
+运行（MP4 来源，自动裁右半边、抠除灰色棋盘格背景、输出 `Image/doubao_atlas.webp`）：
+
+```powershell
+node tools\build_animation_from_mp4.mjs `
+  --input "Image\生成东海帝皇Q版赛马娘循环动画.mp4" `
+  --id doubao
 ```
 
 默认输出到 `Image/donghaidihuang_atlas.webp`。页面只会在首次选择哈基米后
