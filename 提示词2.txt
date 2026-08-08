@@ -1,35 +1,37 @@
- 生成一段 9 秒循环动画，输出为透明背景 PNG 序列帧，共 108 帧，命名从 dopnghaidihuang000.png 到    
-  dopnghaidihuang107.png。                                                                         
-                                                                                                   
-  角色：东海帝皇风格的可爱 Q 版赛马娘少女吉祥物，不要写实，不要复杂背景。                          
-  画面风格：明亮、干净、可爱、二次元 Q 版卡通，线条清晰，色块干净，适合网页互动音乐玩具。          
-  构图：角色正面朝向观众，全身或半身居中，主体稳定，不要大幅位移。                                 
-  背景：透明背景 PNG，不能有白底、灰底、纯色底、阴影底板或场景背景。                               
-  画幅：竖构图，建议 1920×1080 或更高；角色需要位于画面中央偏右区域，保证后期裁剪                  
-  crop=672:960:636:100 后仍完整。                                                                  
-  动作：角色随节拍轻轻律动，动作可爱活泼，包括轻微上下跳动、眨眼、头发和耳朵轻摆、手部小幅摆动。   
-  循环：首尾必须无缝循环，第 0 帧和最后一帧姿态、位置、表情、光影应尽量一致。                      
-  稳定性：角色身份、服装、脸型、发色、耳朵、眼睛、身体比例必须全程一致，不能变脸、变衣服、变发型、 
-  变画风。                                                                                         
-  嘴部：嘴巴可以轻微开合，但不要夸张变形。                                                         
-  相机：固定机位，不能推拉、旋转、摇晃、变焦。                                                     
-  禁止：不要文字、不要 logo、不要水印、不要背景、不要多角色、不要镜头切换、不要过度复杂特效、不要闪
-  烁、不要手脚突然变形、不要身体漂移出画面。                                                       
-                                                                                                   
-  输出要求：                                                                                       
-  1. 透明背景 PNG 序列帧；                                                                         
-  2. 共 108 帧；                                                                                   
-  3. 文件名严格为 dopnghaidihuang000.png、dopnghaidihuang001.png ... dopnghaidihuang107.png；      
-  4. 每张图片尺寸一致；                                                                            
-  5. 首尾无缝循环；                                                                                
-  6. 角色始终在同一位置附近，方便拼成网页精灵图。                                                  
-                                                                                                   
-  如果 AI 工具支持负面提示词，再加这一段：                                                         
-                                                                                                   
-  负面提示词：                                                                                     
-  white background, black background, solid color background, scenery, text, logo, watermark,      
-  subtitles, multiple characters, camera movement, zoom, rotation, motion blur, flicker,           
-  inconsistent face, inconsistent outfit, extra limbs, deformed hands, bad anatomy, cropped        
-  character, low resolution, noisy edges, non-transparent background                               
-                                                                                                   
-  生成好 108 张 PNG 后打包成一个 zip 文件 
+生成一段 9 秒无缝循环动画，最终输出为一个 MP4 文件。
+
+角色：温暖手绘日式奇幻动画风格的可爱少女吉祥物，圆润自然、清澈眼神、朴素但有童话感的服装，整体有怀旧、治愈、冒险童话气质；不要写实，不要复杂背景。
+画面风格：温暖手绘日式奇幻动画质感，柔和自然的线条，清透明亮的色彩，水彩感光影，角色可爱但不幼稚，适合网页互动音乐玩具。
+构图：角色正面朝向观众，全身或半身居中，主体中心位置固定，不要整体位移或漂移。
+角色位置：角色放在画面右半边，右半边裁剪后角色仍完整；左半边可以留空或少量留白。
+画幅：横向 16:9，推荐 1280×720、1920×1080 或更高。后续会自动裁取右半边，所以角色必须完整位于右半边区域。
+背景：使用透明背景；如果工具不能导出真正透明视频，则使用灰白棋盘格透明背景，不要使用真实场景、纯色背景、白底、黑底、蓝底、阴影底板。
+动作：需要大幅摇摆和夸张节奏动作，角色可以左右摆身体、甩头、耳朵大幅弹动、头发明显飘动、手臂活泼挥动、身体随节拍强烈压缩拉伸；动作要有冲击力、喜感和舞感。但角色的脚底/腰部中心/画面锚点必须固定在同一位置，不能整体平移，不能从右半边漂出。
+循环：首尾必须无缝循环，第 0 秒和第 9 秒姿态、位置、表情、光影应尽量一致。
+稳定性：角色身份、服装、脸型、发色、耳朵、眼睛、身体比例必须全程一致，不能变脸、变衣服、变发型、变画风。
+嘴部：嘴巴可以轻微开合，但不要夸张变形。
+相机：固定机位，不能推拉、旋转、摇晃、变焦。
+禁止：不要文字、不要 logo、不要水印、不要字幕、不要背景场景、不要多角色、不要镜头切换、不要过度复杂特效、不要闪烁、不要手脚突然变形、不要身体整体漂移、不要脚底锚点滑动、不要角色离开右半边画面。
+
+输出要求：
+1. 输出一个 MP4 文件；
+2. 时长 9 秒；
+3. 帧率建议 24fps 或 30fps；
+4. 横向 16:9 画幅；
+5. 首尾无缝循环；
+6. 角色完整位于画面右半边，方便后续自动裁取右半边；
+7. 背景必须是透明背景；如果无法导出透明 MP4，就使用灰白棋盘格透明背景；
+8. 不要输出 PNG 序列帧，不要打包 zip，只要一个 MP4 文件。
+
+如果 AI 工具支持负面提示词，再加这一段：
+
+负面提示词：
+white background, black background, blue background, solid color background, scenery, text, logo, watermark, subtitles, multiple characters, camera movement, zoom, rotation, motion blur, flicker, inconsistent face, inconsistent outfit, extra limbs, deformed hands, bad anatomy, cropped character, low resolution, noisy edges, non-looping animation, scene background, horse girl, horse ears, racing outfit, direct imitation of a specific living artist
+
+生成 MP4 后，把文件放到项目 Image 目录，然后运行：
+
+node tools/build_animation_from_mp4.mjs --input "Image/你的动画.mp4" --id doubao
+
+脚本会自动生成项目可读取的：
+Image/doubao_atlas.webp
+Image/doubao_icon.webp
