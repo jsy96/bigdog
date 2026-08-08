@@ -65,72 +65,82 @@ const SFX_LABEL = Object.freeze({
   hajimi: 'ha-ji-mi',
 });
 const SFX_CYCLE_ORDER = Object.freeze(['dagou', 'dingdong', 'hajimi', 'mute']);
-// 顶部形象按钮：内置形象的小图、显示名与循环顺序。对象本身可变，
-// 运行时由自定义形象（bootstrapCustomCharacters / registerCharacterEntry）追加键。
-const CHARACTER_SET_ICON = {
-  dagou: 'Image/dagou_close_mouth.png',
-  dingdongji: 'Image/dingdongji_close_mouth.png',
-  maodie: 'Image/maodie_close_mouth.png',
-  emperor: 'Image/donghaidihuang_icon.webp',
-};
-const CHARACTER_SET_LABEL = {
-  dagou: '大狗',
-  dingdongji: '叮咚鸡',
-  maodie: '哈基米',
-  emperor: '帝皇',
-};
-const CHARACTER_SET_CYCLE = ['dagou', 'dingdongji', 'maodie', 'emperor'];
-// 形象与音效解耦：形象按角色 id 索引。帝皇（emperor）使用独立动画，无静态图集。
-// custom: true 标记本地上传的自定义形象（渲染走互斥可见，避免透明背景重影）。
-const CHARACTER_IMAGE_SETS = {
-  dagou: { close: 'Image/dagou_close_mouth.png', open: 'Image/dagou_open_mouth.png', alt: '大狗' },
-  dingdongji: { close: 'Image/dingdongji_close_mouth.png', open: 'Image/dingdongji_open_mouth.png', alt: '叮咚鸡' },
-  maodie: { close: 'Image/maodie_close_mouth.png', open: 'Image/maodie_open_mouth.png', alt: '哈基米' },
-};
+// 顶部形象按钮：形象的小图、显示名与循环顺序。
+// 这些表初始为空，启动时由 loadCharactersFromServer() 从后端（扫描 Image 目录）填充，
+// 自定义形象上传成功后由 registerCharacterEntry() 追加。
+const CHARACTER_SET_ICON = {};
+const CHARACTER_SET_LABEL = {};
+const CHARACTER_SET_CYCLE = [];
+// 形象与音效解耦：形象按角色 id 索引。
+// 每条记录字段：{ id, label, type:'static'|'animation', icon, close, open, atlas?, builtin }
+// type:'animation' 使用精灵图动画（无静态图集）；builtin:false 为用户上传的自定义形象。
+const CHARACTER_IMAGE_SETS = {};
 
-/* ---------- 自定义形象：本地上传闭嘴/张嘴双图，压缩后存 localStorage，运行时注入形象数据。 ---------- */
-const CUSTOM_CHARACTER_STORE_KEY = 'dagou-custom-characters-v1';
+// 服务器不可用时的兜底形象（直接 file:// 打开 / 后端未启动时仍可基本游玩）。
+// 正常通过后端访问时，loadCharactersFromServer 会用 Image 目录扫描结果整体覆盖。
+const BUILTIN_FALLBACK_CHARACTERS = [
+  { id: 'dagou', label: '大狗', type: 'static', icon: 'Image/dagou_close_mouth.png', close: 'Image/dagou_close_mouth.png', open: 'Image/dagou_open_mouth.png', builtin: true },
+  { id: 'dingdongji', label: '叮咚鸡', type: 'static', icon: 'Image/dingdongji_close_mouth.png', close: 'Image/dingdongji_close_mouth.png', open: 'Image/dingdongji_open_mouth.png', builtin: true },
+  { id: 'maodie', label: '哈基米', type: 'static', icon: 'Image/maodie_close_mouth.png', close: 'Image/maodie_close_mouth.png', open: 'Image/maodie_open_mouth.png', builtin: true },
+  { id: 'donghaidihuang', label: '帝皇', type: 'animation', icon: 'Image/donghaidihuang_icon.webp', atlas: 'Image/donghaidihuang_atlas.webp', builtin: true },
+];
+
+// 当前形象是否为精灵图动画形象（取代旧的 id === 'emperor' 硬编码判断）。
+function isAnimationCharacter(id) {
+  return CHARACTER_IMAGE_SETS[id]?.type === 'animation';
+}
+
+/* ---------- 形象清单：由后端扫描 Image 目录驱动，自定义形象落盘到 Image 目录。 ---------- */
 const SELECTED_CHARACTER_STORE_KEY = 'dagou-selected-character-v1';
-const CUSTOM_CHARACTER_MAX_WIDTH = 360; // 压缩目标宽度（px），与内置形象同量级
+const CUSTOM_CHARACTER_MAX_WIDTH = 360; // 上传压缩目标宽度（px），与内置形象同量级
 
-function loadCustomCharacters() {
-  try {
-    const raw = window.localStorage.getItem(CUSTOM_CHARACTER_STORE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(list)) return [];
-    return list.filter((it) => it && it.id && it.close && it.open);
-  } catch (error) {
-    console.warn('[大狗Tap] 自定义形象读取失败。', error);
-    return [];
+// 用一份完整的形象清单整体覆盖运行时形象表（清空旧键后重建）。
+function populateCharacters(list) {
+  for (const k of Object.keys(CHARACTER_IMAGE_SETS)) delete CHARACTER_IMAGE_SETS[k];
+  for (const k of Object.keys(CHARACTER_SET_ICON)) delete CHARACTER_SET_ICON[k];
+  for (const k of Object.keys(CHARACTER_SET_LABEL)) delete CHARACTER_SET_LABEL[k];
+  CHARACTER_SET_CYCLE.length = 0;
+  for (const c of list) {
+    if (!c || !c.id) continue;
+    CHARACTER_IMAGE_SETS[c.id] = { ...c, alt: c.label };
+    CHARACTER_SET_ICON[c.id] = c.icon || c.close;
+    CHARACTER_SET_LABEL[c.id] = c.label;
+    CHARACTER_SET_CYCLE.push(c.id);
   }
 }
 
-function saveCustomCharacters(list) {
-  // 配额超限会抛 QuotaExceededError，由调用方提示用户清理。
-  window.localStorage.setItem(CUSTOM_CHARACTER_STORE_KEY, JSON.stringify(list));
+// 从后端拉取形象清单（后端扫描 Image 目录得出）。失败则回退内置兜底形象。
+async function loadCharactersFromServer() {
+  try {
+    const res = await fetch('/api/characters', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = Array.isArray(data.characters) ? data.characters : [];
+    if (!list.length) throw new Error('empty character list');
+    populateCharacters(list);
+    return true;
+  } catch (err) {
+    console.warn('[大狗Tap] 后端形象清单加载失败，回退内置形象。', err);
+    populateCharacters(BUILTIN_FALLBACK_CHARACTERS);
+    return false;
+  }
 }
 
-// 把一条自定义形象注册进运行时形象表，使其出现在切换循环里。
+// 把一条自定义形象注册进运行时形象表（上传成功后调用），使其出现在切换循环里。
 function registerCharacterEntry(entry) {
-  CHARACTER_IMAGE_SETS[entry.id] = {
-    close: entry.close, open: entry.open, alt: entry.label, custom: true,
-  };
-  CHARACTER_SET_ICON[entry.id] = entry.close;
+  CHARACTER_IMAGE_SETS[entry.id] = { ...entry, alt: entry.label };
+  CHARACTER_SET_ICON[entry.id] = entry.icon || entry.close;
   CHARACTER_SET_LABEL[entry.id] = entry.label;
   if (!CHARACTER_SET_CYCLE.includes(entry.id)) CHARACTER_SET_CYCLE.push(entry.id);
 }
 
+// 从运行时形象表移除一条（删除成功后调用）。
 function removeCharacterEntry(id) {
   delete CHARACTER_IMAGE_SETS[id];
   delete CHARACTER_SET_ICON[id];
   delete CHARACTER_SET_LABEL[id];
   const idx = CHARACTER_SET_CYCLE.indexOf(id);
   if (idx >= 0) CHARACTER_SET_CYCLE.splice(idx, 1);
-}
-
-// 启动时把 localStorage 里的自定义形象注入形象表（须在首次显示与恢复选择之前）。
-function bootstrapCustomCharacters() {
-  for (const entry of loadCustomCharacters()) registerCharacterEntry(entry);
 }
 
 function persistSelectedCharacter() {
@@ -143,16 +153,19 @@ function persistSelectedCharacter() {
 
 function restoreSelectedCharacter() {
   try {
-    const saved = window.localStorage.getItem(SELECTED_CHARACTER_STORE_KEY);
+    let saved = window.localStorage.getItem(SELECTED_CHARACTER_STORE_KEY);
+    // 兼容旧版本：旧代码把东海帝皇保存为 emperor，新后端扫描 id 为 donghaidihuang。
+    if (saved === 'emperor') saved = 'donghaidihuang';
     if (saved && CHARACTER_SET_CYCLE.includes(saved)) selectedCharacterId = saved;
   } catch (error) {
     console.warn('[大狗Tap] 形象选择读取失败。', error);
   }
 }
-const HAJIMI_ATLAS_URL =
-  'Image/donghaidihuang_atlas.webp?v=20260721-beat-synced';
-const HAJIMI_STATIC_ICON_URL = 'Image/maodie_close_mouth.png';
-const HAJIMI_ANIMATION_ICON_URL = 'Image/donghaidihuang_icon.webp';
+// 当前动画形象的精灵图 atlas 地址（帝皇由后端形象清单提供，兜底为内置帝皇图集）。
+function currentAnimationAtlasUrl() {
+  return CHARACTER_IMAGE_SETS[selectedCharacterId]?.atlas
+    || 'Image/donghaidihuang_atlas.webp';
+}
 const HAJIMI_ANIMATION_BEATS = 9;
 const HAJIMI_FRAMES_PER_BEAT = 12;
 const HAJIMI_ATLAS_COLUMNS = 12;
@@ -710,25 +723,28 @@ function renderHajimiAnimationFrame(beatPosition) {
 }
 
 function applyCharacterVisibility() {
-  const isEmperor = selectedCharacterId === 'emperor';
-  const showAnimation = isEmperor && hajimiAnimationReady;
+  const isAnimation = isAnimationCharacter(selectedCharacterId);
+  const showAnimation = isAnimation && hajimiAnimationReady;
   dogInner.classList.toggle('is-emperor-animation', showAnimation);
   dogAnimationCanvas.setAttribute('aria-hidden', String(!showAnimation));
 
-  // 哈基米（maodie）与自定义形象两张图轮廓/透明区域不一致，需互斥可见，
+  // 哈基米（maodie）与自定义形象（builtin:false）两张图轮廓/透明区域不一致，需互斥可见，
   // 避免透明背景叠加时下层闭嘴图透出造成重影；其余内置形象用通用透明度切换。
   const isExclusiveMouth = selectedCharacterId === 'maodie'
-    || CHARACTER_IMAGE_SETS[selectedCharacterId]?.custom === true;
+    || CHARACTER_IMAGE_SETS[selectedCharacterId]?.builtin === false;
   dogInner.classList.toggle('is-hajimi', isExclusiveMouth);
 
-  if (isEmperor) {
+  if (isAnimation) {
     dogCloseImage.alt = '';
   } else {
     const set = CHARACTER_IMAGE_SETS[selectedCharacterId]
+      ?? CHARACTER_IMAGE_SETS.maodie
       ?? CHARACTER_IMAGE_SETS.dagou;
-    dogCloseImage.src = set.close;
-    dogCloseImage.alt = set.alt;
-    dogOpenImage.src = set.open;
+    if (set) {
+      dogCloseImage.src = set.close;
+      dogCloseImage.alt = set.alt;
+      dogOpenImage.src = set.open;
+    }
   }
 
   if (showAnimation) renderHajimiAnimationFrame(getAudioBeatPosition());
@@ -737,7 +753,7 @@ function applyCharacterVisibility() {
 function ensureHajimiAnimationLoaded() {
   if (hajimiAnimationReady || hajimiAnimationRequested) return;
   hajimiAnimationRequested = true;
-  dogAnimationAtlas.src = HAJIMI_ATLAS_URL;
+  dogAnimationAtlas.src = currentAnimationAtlasUrl();
 }
 
 function updateSfxSetButton() {
@@ -781,15 +797,16 @@ function cycleSfx() {
   if (next !== 'mute') markSfxNewSeen(next);
 }
 
-// 顶部形象按钮：点击在 4 种形象（含帝皇）间循环切换，只改画面角色、不改音效。
+// 顶部形象按钮：在所有形象（内置 + 自定义）间循环切换，只改画面角色、不改音效。
 function cycleCharacterSet() {
+  if (!CHARACTER_SET_CYCLE.length) return;
   const idx = CHARACTER_SET_CYCLE.indexOf(selectedCharacterId);
   const next = CHARACTER_SET_CYCLE[(idx + 1) % CHARACTER_SET_CYCLE.length];
   selectedCharacterId = next;
-  if (next === 'emperor') {
+  if (isAnimationCharacter(next)) {
     alignHajimiAnimationToBeat();
     ensureHajimiAnimationLoaded();
-    if (!hajimiAnimationReady) showToyNotice('正在加载东海帝皇动画…');
+    if (!hajimiAnimationReady) showToyNotice('正在加载动画形象…');
   }
   applyCharacterVisibility();
   updateCharacterSetButton();
@@ -958,7 +975,10 @@ async function onCustomFileChange(event) {
 }
 
 function refreshCustomExistingList() {
-  const list = loadCustomCharacters();
+  // 自定义形象 = 后端清单里 builtin:false 的条目（运行时存在 CHARACTER_IMAGE_SETS）。
+  const list = Object.values(CHARACTER_IMAGE_SETS)
+    .filter((c) => c.builtin === false)
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   ccmExistingList.replaceChildren();
   if (!list.length) {
     ccmExisting.style.display = 'none';
@@ -981,13 +1001,15 @@ function refreshCustomExistingList() {
   }
 }
 
-function removeCustomCharacter(id) {
-  const list = loadCustomCharacters().filter((e) => e.id !== id);
+async function removeCustomCharacter(id) {
   try {
-    saveCustomCharacters(list);
+    const res = await fetch(`/api/characters/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (error) {
-    console.warn('[大狗Tap] 自定义形象删除保存失败。', error);
-    showToyNotice('删除失败，请稍后重试。', true);
+    console.warn('[大狗Tap] 自定义形象删除失败。', error);
+    showToyNotice('删除失败：服务器未启动或网络错误。', true);
     return;
   }
   removeCharacterEntry(id);
@@ -1016,28 +1038,32 @@ async function confirmCustomCharacter() {
       return;
     }
   }
-  const entry = {
-    id: `custom-${Date.now()}`,
-    label,
-    close: closeImg.dataUrl,
-    open: openDataUrl,
-  };
-  const list = loadCustomCharacters();
-  list.push(entry);
+  ccmConfirm.disabled = true;
   try {
-    saveCustomCharacters(list);
+    // 上传到后端：压缩后的 PNG dataURL 由服务端解码落盘到 Image 目录，刷新或重开都会自动加载。
+    const res = await fetch('/api/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, close: closeImg.dataUrl, open: openDataUrl }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const entry = data.character;
+    if (!entry || !entry.id) throw new Error('bad server response');
+    registerCharacterEntry(entry);
+    selectedCharacterId = entry.id;
+    persistSelectedCharacter();
+    applyCharacterVisibility();
+    updateCharacterSetButton();
+    closeCustomCharacterModal();
+    showToyNotice(`已添加并切换到形象「${label}」。`);
   } catch (error) {
-    console.warn('[大狗Tap] 自定义形象保存失败。', error);
-    showToyNotice('保存失败：浏览器本地存储空间不足，可先删除旧形象。', true);
-    return;
+    console.warn('[大狗Tap] 自定义形象上传失败。', error);
+    showToyNotice('保存失败：服务器未启动或网络错误。', true);
+  } finally {
+    // 确认按钮可用性交回 refreshCustomEditorPreview（按两帧是否就绪控制）
+    refreshCustomEditorPreview();
   }
-  registerCharacterEntry(entry);
-  selectedCharacterId = entry.id;
-  persistSelectedCharacter();
-  applyCharacterVisibility();
-  updateCharacterSetButton();
-  closeCustomCharacterModal();
-  showToyNotice(`已添加并切换到形象「${label}」。`);
 }
 
 function openCustomCharacterModal() {
@@ -1063,25 +1089,31 @@ function resolveSfxSample(sample, sfxId = selectedSfxId) {
 renderToyCloudState();
 const toyStateReady = initializeToyCloudState();
 
-// 先注入 localStorage 中的自定义形象，再恢复上次的形象选择，最后同步显示。
-bootstrapCustomCharacters();
-restoreSelectedCharacter();
-applyCharacterVisibility();
+// 形象由后端 Image 目录驱动：先拉取形象清单，再恢复上次的形象选择，最后同步显示。
+// 异步进行：fetch 期间页面已显示（遮罩层之下），形象到位后立即刷新画面。
+initCharacters();
+
+async function initCharacters() {
+  await loadCharactersFromServer();
+  restoreSelectedCharacter();
+  applyCharacterVisibility();
+  updateCharacterSetButton();
+}
 
 dogAnimationAtlas.addEventListener('load', () => {
   hajimiAnimationReady = true;
-  if (selectedCharacterId === 'emperor') alignHajimiAnimationToBeat();
+  if (isAnimationCharacter(selectedCharacterId)) alignHajimiAnimationToBeat();
   applyCharacterVisibility();
 });
 dogAnimationAtlas.addEventListener('error', () => {
-  const wasWaitingForAnimation = selectedCharacterId === 'emperor';
+  const wasWaitingForAnimation = isAnimationCharacter(selectedCharacterId);
   hajimiAnimationReady = false;
   hajimiAnimationRequested = false;
   dogAnimationAtlas.removeAttribute('src');
-  // 帝皇动画加载失败时回退到哈基米原皮形象，避免画面空白。
+  // 动画形象加载失败时回退到哈基米原皮形象，避免画面空白。
   if (wasWaitingForAnimation) {
     selectedCharacterId = 'maodie';
-    showToyNotice('东海帝皇动画加载失败，已切换为哈基米形象。', true);
+    showToyNotice('动画形象加载失败，已切换为哈基米形象。', true);
   }
   applyCharacterVisibility();
 });
@@ -3039,7 +3071,7 @@ function tick() {
   lastTick = now;
   const uiBeatPosition = getAudioBeatPosition();
   updateUiRhythm(uiBeatPosition);
-  if (selectedCharacterId === 'emperor' && hajimiAnimationReady) {
+  if (isAnimationCharacter(selectedCharacterId) && hajimiAnimationReady) {
     renderHajimiAnimationFrame(uiBeatPosition);
   }
 

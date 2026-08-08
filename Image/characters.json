@@ -1,0 +1,10 @@
+{
+  "custom": [
+    {
+      "id": "custom_mskfoune_af6sdb",
+      "label": "3",
+      "close": "custom_mskfoune_af6sdb_close.png",
+      "open": "custom_mskfoune_af6sdb_open.png"
+    }
+  ]
+}
