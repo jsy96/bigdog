@@ -166,7 +166,7 @@ const CREATOR_MID = '357762853';
 const CREATOR_URL = `https://space.bilibili.com/${CREATOR_MID}`;
 const FEATURED_BVID = 'BV1kNKU6REBg';
 const FEATURED_VIDEO_URL = `https://www.bilibili.com/video/${FEATURED_BVID}/`;
-const NAVIGATION_MUTE_KEY = 'dagou-navigation-muted';
+// 本地持久化键名（沿用历史命名）：替代 b站 Toy 云端存储，保存演奏设置。
 const TOY_CLOUD_KEYS = Object.freeze({
   sfxUnlocked: 'dagou_sfx_unlocked_v1',
   settingsSeen: 'dagou_settings_seen_v1',
@@ -179,23 +179,56 @@ const TOY_CLOUD_KEYS = Object.freeze({
   showGrid: 'dagou_show_grid_v1',
 });
 const TOY_CLOUD_KEY_LIST = Object.freeze(Object.values(TOY_CLOUD_KEYS));
-const TOY_REQUIRED_ABILITIES = Object.freeze([
-  'getUserProfile',
-  'getCloudStorage',
-  'setCloudStorage',
-  'navigate',
-]);
 const VIDEO_UNLOCK_ITEM_IDS = new Set(['dingdong', 'hajimi']);
 const LOCKED_SFX_IDS = new Set(['dingdong']);
-const DEBUG_UNLOCK_SFX = false; // 临时调试：发布前改回 false，恢复 Toy 云端锁定。
 let controlsIdleTimer = 0;
-let navigationMuted = false;
 
-try {
-  navigationMuted =
-    window.sessionStorage.getItem(NAVIGATION_MUTE_KEY) === '1';
-} catch (error) {
-  console.warn('[大狗Tap] 无法读取导航临时静音状态。', error);
+/* 本地设置存储：替代 b站 Toy SDK 的云端读写。所有键沿用 TOY_CLOUD_KEYS，
+   读取时 sfxUnlocked 固定为 '1'（方案 A：直接全部解锁，无看视频解锁流程）。 */
+const LOCAL_SETTINGS_STORE_KEY = 'dagou-tap-local-settings-v1';
+
+function readLocalSettings() {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_SETTINGS_STORE_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    return data && typeof data === 'object' ? data : {};
+  } catch (error) {
+    console.warn('[大狗Tap] 本地设置读取失败。', error);
+    return {};
+  }
+}
+
+function writeLocalSettings(patch) {
+  try {
+    const next = { ...readLocalSettings(), ...patch };
+    window.localStorage.setItem(LOCAL_SETTINGS_STORE_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.warn('[大狗Tap] 本地设置保存失败。', error);
+  }
+}
+
+/* 本地适配器：提供与原 Toy SDK 一致的 getCloudStorage / setCloudStorage 接口，
+   使上层 initializeToyCloudState 等逻辑无需改动即改用本地存储。 */
+const localToyAdapter = Object.freeze({
+  async getCloudStorage() {
+    const stored = readLocalSettings();
+    const result = {};
+    for (const key of TOY_CLOUD_KEY_LIST) {
+      result[key] = Object.prototype.hasOwnProperty.call(stored, key)
+        ? stored[key]
+        : null;
+    }
+    result[TOY_CLOUD_KEYS.sfxUnlocked] = '1';
+    return result;
+  },
+  async setCloudStorage(items) {
+    writeLocalSettings(items || {});
+  },
+});
+
+/* 站外跳转（视频 / 作者主页）：原 Toy navigate 已移除，统一用新标签打开 b站。 */
+function openExternalUrl(url) {
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /* ---------- DOM ---------- */
@@ -225,12 +258,6 @@ const updateDot = document.getElementById('update-dot');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsPanel = document.getElementById('settings-panel');
 const settingsClose = document.getElementById('settings-close');
-const unlockConfirmOverlay = document.getElementById('unlock-confirm-overlay');
-const unlockConfirmDialog = document.getElementById('unlock-confirm-dialog');
-const unlockConfirmTitle = document.getElementById('unlock-confirm-title');
-const unlockConfirmMessage = document.getElementById('unlock-confirm-message');
-const unlockConfirmCancel = document.getElementById('unlock-confirm-cancel');
-const unlockConfirmSubmit = document.getElementById('unlock-confirm-submit');
 const authorHomeButton = document.getElementById('author-home-button');
 const videoCard = document.getElementById('video-card');
 const videoPlay = videoCard.querySelector('.video-play');
@@ -282,29 +309,6 @@ function setBusMuted(bus, muted) {
   const now = ctx.currentTime;
   bus.gain.cancelScheduledValues(now);
   bus.gain.setTargetAtTime(muted ? 0 : 1, now, 0.015);
-}
-
-function setNavigationMute(muted) {
-  navigationMuted = muted;
-
-  try {
-    if (muted) {
-      window.sessionStorage.setItem(NAVIGATION_MUTE_KEY, '1');
-    } else {
-      window.sessionStorage.removeItem(NAVIGATION_MUTE_KEY);
-    }
-  } catch (error) {
-    console.warn('[大狗Tap] 无法保存导航临时静音状态。', error);
-  }
-
-  if (!ctx || !master) return;
-  const now = ctx.currentTime;
-  master.gain.cancelScheduledValues(now);
-  master.gain.setTargetAtTime(muted ? 0 : MASTER_GAIN, now, 0.015);
-}
-
-function restoreAfterNavigation() {
-  if (navigationMuted) setNavigationMute(false);
 }
 
 function updateMuteButton(button, muted, label) {
@@ -413,96 +417,23 @@ function updateUiRhythm(beatPosition) {
   updateAuthorNameLetters(beatIndex, pulse);
 }
 
-async function navigateWithToy(type, id, fallbackUrl, label) {
-  try {
-    if (window.toy && typeof window.toy.navigate === 'function') {
-      await window.toy.navigate({ type, id });
-      return;
-    }
-  } catch (error) {
-    console.warn(`[大狗Tap] Toy ${label}导航不可用，改用浏览器跳转。`, error);
-  }
-  window.location.assign(fallbackUrl);
-}
-
 function openCreatorSpace() {
-  setNavigationMute(true);
-  return navigateWithToy('space', CREATOR_MID, CREATOR_URL, '主页');
+  openExternalUrl(CREATOR_URL);
 }
 
 let videoUnlockPending = false;
 
-async function openFeaturedVideo(options) {
-  const optimisticUnlock = options?.optimisticUnlock === true;
-  const delayAfterCloudWriteMs = Number.isFinite(options?.delayAfterCloudWriteMs)
-    ? Math.max(0, options.delayAfterCloudWriteMs)
-    : 0;
+/* 视频卡片：原 Toy 站内解锁流程已移除，点击直接在新标签打开 b站 开发视频。 */
+function openFeaturedVideo() {
   if (videoUnlockPending) return;
   videoUnlockPending = true;
   videoCard.setAttribute('aria-busy', 'true');
-
-  try {
-    const state = await toyStateReady;
-    if (!state.environmentAvailable || !state.toy) {
-      setNavigationMute(true);
-      window.location.assign(FEATURED_VIDEO_URL);
-      return;
-    }
-
-    const wasUnlocked = state.sfxUnlocked;
-    if (optimisticUnlock && !wasUnlocked) {
-      state.sfxUnlocked = true;
-      renderToyCloudState();
-    }
-    if (optimisticUnlock && !state.cloudReadable) {
-      showToyNotice(
-        '解锁失败，请确认已登录哔哩哔哩后刷新重试。多次失败建议更新APP。',
-        true
-      );
-      return;
-    }
-
-    let unlockedNow = false;
-    if (state.cloudReadable && !wasUnlocked) {
-      try {
-        await state.toy.setCloudStorage({
-          [TOY_CLOUD_KEYS.sfxUnlocked]: '1',
-        });
-      } catch (error) {
-        markToyCloudUnavailable(state);
-        console.warn('[大狗Tap] 音效解锁状态写入失败。', error);
-        showToyNotice(
-          '解锁失败，请确认已登录哔哩哔哩后刷新重试。多次失败建议更新APP。',
-          true
-        );
-        return;
-      }
-
-      state.sfxUnlocked = true;
-      unlockedNow = true;
-      renderToyCloudState();
-      if (delayAfterCloudWriteMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayAfterCloudWriteMs));
-      }
-    }
-
-    try {
-      setNavigationMute(true);
-      await state.toy.navigate({ type: 'video', id: FEATURED_BVID });
-    } catch (error) {
-      setNavigationMute(false);
-      console.warn('[大狗Tap] Toy 视频导航失败。', error);
-      showToyNotice(
-        unlockedNow
-          ? '已完成解锁，但视频打开失败，请稍后重试。多次失败建议更新APP。'
-          : '视频打开失败，请稍后重试。多次失败建议更新APP。',
-        true
-      );
-    }
-  } finally {
+  openExternalUrl(FEATURED_VIDEO_URL);
+  // 新标签打开后本页仍在，短暂保留 busy 态防止连点，随后恢复。
+  window.setTimeout(() => {
     videoUnlockPending = false;
     videoCard.removeAttribute('aria-busy');
-  }
+  }, 400);
 }
 
 for (const button of topControls.querySelectorAll('button')) {
@@ -529,15 +460,13 @@ sfxToggle.addEventListener('click', toggleSoundEffects);
 
 /* ---------- 设置菜单与 Toy 云状态 ---------- */
 let settingsOpen = false;
-let unlockConfirmOpen = false;
-let unlockConfirmTrigger = null;
 let toyNoticeTimer = 0;
 const toyCloudState = {
   toy: null,
   initialized: false,
   environmentAvailable: false,
   cloudReadable: false,
-  sfxUnlocked: DEBUG_UNLOCK_SFX,
+  sfxUnlocked: true,
   settingsSeen: false,
   newSeen: {
     dingdong: false,
@@ -729,10 +658,6 @@ function readCloudPerformanceSettings(cloud) {
 }
 
 function renderPerformanceSettings() {
-  const cloudAvailable =
-    toyCloudState.initialized &&
-    toyCloudState.environmentAvailable &&
-    toyCloudState.cloudReadable;
   octaveSwitchingSetting.hidden = !performanceSettings.pianoMode;
 
   for (const button of performanceSettingButtons) {
@@ -744,18 +669,13 @@ function renderPerformanceSettings() {
     button.disabled = !toyCloudState.initialized || performanceSettingsSaving;
   }
 
-  performanceSettingsStatus.classList.toggle(
-    'is-error',
-    toyCloudState.initialized && !cloudAvailable
-  );
+  performanceSettingsStatus.classList.remove('is-error');
   if (performanceSettingsSaving) {
-    performanceSettingsStatus.textContent = '正在保存到哔哩哔哩云端…';
+    performanceSettingsStatus.textContent = '正在保存设置…';
   } else if (!toyCloudState.initialized) {
-    performanceSettingsStatus.textContent = '正在读取哔哩哔哩云端设置…';
-  } else if (cloudAvailable) {
-    performanceSettingsStatus.textContent = '设置已通过哔哩哔哩云端同步';
+    performanceSettingsStatus.textContent = '正在读取本地设置…';
   } else {
-    performanceSettingsStatus.textContent = '云存储不可用，本次设置仅在当前页面有效';
+    performanceSettingsStatus.textContent = '设置已保存到本地';
   }
   renderOctaveControls();
 }
@@ -781,36 +701,9 @@ function renderToyCloudState() {
   renderPerformanceSettings();
 }
 
-async function detectToyEnvironment() {
-  const toy = window.toy;
-  if (
-    !toy ||
-    typeof toy.isSupport !== 'function' ||
-    TOY_REQUIRED_ABILITIES.some((ability) => typeof toy[ability] !== 'function')
-  ) {
-    return null;
-  }
-
-  try {
-    const support = await Promise.all(
-      TOY_REQUIRED_ABILITIES.map((ability) => toy.isSupport(ability))
-    );
-    if (support.some((available) => available !== true)) return null;
-
-    const profile = await toy.getUserProfile();
-    const nickname = typeof profile?.nickname === 'string'
-      ? profile.nickname.trim()
-      : '';
-    const avatar = typeof profile?.avatar === 'string'
-      ? profile.avatar.trim()
-      : '';
-    if (!nickname || !avatar) return null;
-
-    return toy;
-  } catch (error) {
-    console.warn('[大狗Tap] Toy 站内环境检测失败。', error);
-    return null;
-  }
+// b站 Toy SDK 已移除：环境始终可用，直接返回本地存储适配器。
+function detectToyEnvironment() {
+  return localToyAdapter;
 }
 
 async function initializeToyCloudState() {
@@ -831,8 +724,7 @@ async function initializeToyCloudState() {
       throw new Error('Toy 云存储返回值无效');
     }
     toyCloudState.cloudReadable = true;
-    toyCloudState.sfxUnlocked =
-      DEBUG_UNLOCK_SFX || cloud[TOY_CLOUD_KEYS.sfxUnlocked] === '1';
+    toyCloudState.sfxUnlocked = true;
     replacePerformanceSettings(readCloudPerformanceSettings(cloud));
 
     if (!toyCloudState.locallyChanged.settingsSeen) {
@@ -912,74 +804,6 @@ function markAllSfxNewSeen() {
   persistSeenState(items);
 }
 
-async function requireToyCloudContext() {
-  const state = await toyStateReady;
-  if (!state.environmentAvailable || !state.toy) {
-    showToyNotice('请在B站打开此页面或者更新哔哩哔哩手机APP后再解锁', true);
-    return null;
-  }
-  if (!state.cloudReadable) {
-    showToyNotice(
-      '云端状态读取失败，请确认已登录哔哩哔哩后刷新重试。多次失败建议更新APP。',
-      true
-    );
-    return null;
-  }
-  return state;
-}
-
-function openUnlockConfirm(unlockItem, trigger) {
-  if (unlockConfirmOpen || videoUnlockPending) return;
-  const itemLabel = unlockItem === 'emperor'
-    ? '哈基米（帝皇）'
-    : '叮咚鸡';
-  unlockConfirmOpen = true;
-  unlockConfirmTrigger = trigger ?? null;
-  unlockConfirmTitle.textContent = `解锁${itemLabel}`;
-  unlockConfirmMessage.textContent =
-    `${itemLabel}尚未解锁。观看开发视频即可同时解锁叮咚鸡和哈基米（帝皇），是否现在跳转？`;
-  settingsOverlay.inert = true;
-  unlockConfirmOverlay.inert = false;
-  unlockConfirmOverlay.classList.add('is-open');
-  unlockConfirmOverlay.setAttribute('aria-hidden', 'false');
-  unlockConfirmSubmit.focus({ preventScroll: true });
-}
-
-function closeUnlockConfirm(restoreFocus = true) {
-  if (!unlockConfirmOpen || videoUnlockPending) return;
-  const trigger = unlockConfirmTrigger;
-  unlockConfirmOpen = false;
-  unlockConfirmTrigger = null;
-  unlockConfirmOverlay.inert = true;
-  unlockConfirmOverlay.classList.remove('is-open');
-  unlockConfirmOverlay.setAttribute('aria-hidden', 'true');
-  if (settingsOpen) settingsOverlay.inert = false;
-  if (restoreFocus && settingsOpen) {
-    (trigger ?? settingsClose).focus({ preventScroll: true });
-  }
-}
-
-function setUnlockConfirmPending(pending) {
-  unlockConfirmCancel.disabled = pending;
-  unlockConfirmSubmit.disabled = pending;
-  unlockConfirmSubmit.textContent = pending ? '跳转中…' : '前往视频解锁';
-  if (pending) unlockConfirmSubmit.setAttribute('aria-busy', 'true');
-  else unlockConfirmSubmit.removeAttribute('aria-busy');
-}
-
-async function confirmUnlockFromVideo() {
-  if (!unlockConfirmOpen || videoUnlockPending) return;
-  setUnlockConfirmPending(true);
-  try {
-    await openFeaturedVideo({
-      optimisticUnlock: true,
-      delayAfterCloudWriteMs: 500,
-    });
-  } finally {
-    setUnlockConfirmPending(false);
-    closeUnlockConfirm();
-  }
-}
 
 /* 哈基米音效卡本身永不显示锁：皮肤切换收敛到独立的形象切换行，
    帝皇的锁与 NEW 只挂在帝皇选项上，避免“哈基米被锁”的歧义。 */
@@ -1120,53 +944,18 @@ function selectSfxOption(option) {
   applyHajimiAnimationVisibility();
 }
 
-async function handleSfxOptionClick(option) {
-  const sfxId = option.dataset.sfx;
-  const requiresVideoUnlock = LOCKED_SFX_IDS.has(sfxId);
-  if (!requiresVideoUnlock) {
-    selectSfxOption(option);
-    return;
-  }
-
-  markSfxNewSeen(sfxId);
-  if (toyCloudState.sfxUnlocked) {
-    selectSfxOption(option);
-    return;
-  }
-
-  const state = await requireToyCloudContext();
-  if (!state) return;
-  if (!state.sfxUnlocked) {
-    openUnlockConfirm('dingdong', option);
-    return;
-  }
-
+// 方案 A：所有音色直接解锁，点击即用。
+function handleSfxOptionClick(option) {
+  markSfxNewSeen(option.dataset.sfx);
   selectSfxOption(option);
 }
 
 /* 形象切换行只在选中哈基米时可见可点：原皮随意换回；
    帝皇未解锁时点击只引导去看开发视频，绝不影响哈基米音效本身。 */
-async function handleSkinOptionClick(button) {
+// 方案 A：帝皇形象直接解锁，点击即用。
+function handleSkinOptionClick(button) {
   if (selectedSfxId !== 'hajimi') return;
-  if (button.dataset.skin !== 'emperor') {
-    setHajimiSkin(false);
-    return;
-  }
-
-  markSfxNewSeen('hajimi');
-  if (toyCloudState.sfxUnlocked) {
-    setHajimiSkin(true);
-    return;
-  }
-
-  const state = await requireToyCloudContext();
-  if (!state) return;
-  if (!state.sfxUnlocked) {
-    openUnlockConfirm('emperor', button);
-    return;
-  }
-
-  setHajimiSkin(true);
+  setHajimiSkin(button.dataset.skin === 'emperor');
 }
 
 function resolveSfxSample(sample, sfxId = selectedSfxId) {
@@ -1319,7 +1108,6 @@ function openSettings() {
 
 function closeSettings() {
   if (!settingsOpen) return;
-  if (unlockConfirmOpen) closeUnlockConfirm(false);
   markAllSfxNewSeen();
   settingsOpen = false;
   settingsOverlay.inert = true;
@@ -1343,21 +1131,9 @@ for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercanc
   settingsOverlay.addEventListener(eventName, (event) => event.stopPropagation());
 }
 settingsPanel.addEventListener('click', (event) => event.stopPropagation());
-unlockConfirmCancel.addEventListener('click', () => closeUnlockConfirm());
-unlockConfirmSubmit.addEventListener('click', () => {
-  void confirmUnlockFromVideo();
-});
-unlockConfirmOverlay.addEventListener('pointerdown', (event) => {
-  if (event.target === unlockConfirmOverlay) closeUnlockConfirm();
-});
-for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
-  unlockConfirmOverlay.addEventListener(eventName, (event) => event.stopPropagation());
-}
-unlockConfirmDialog.addEventListener('click', (event) => event.stopPropagation());
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  if (unlockConfirmOpen) closeUnlockConfirm();
-  else closeSettings();
+  closeSettings();
 });
 
 authorHomeButton.addEventListener('click', handleAuthorHomeClick);
@@ -1374,21 +1150,6 @@ for (const button of hajimiSkinOptions) {
     void handleSkinOptionClick(button);
   });
 }
-
-document.addEventListener(
-  'pointerdown',
-  (event) => {
-    const target = event.target;
-    if (
-      target instanceof Element &&
-      target.closest('#music-toggle, #sfx-toggle')
-    ) {
-      return;
-    }
-    restoreAfterNavigation();
-  },
-  { capture: true }
-);
 
 /* ---------- 和弦走向：C - G - Am - F（简单洗脑） ---------- */
 const CHORDS = [
@@ -1532,7 +1293,7 @@ function initAudio() {
   ctx = new (window.AudioContext || window.webkitAudioContext)();
 
   master = ctx.createGain();
-  master.gain.value = navigationMuted ? 0 : MASTER_GAIN;
+  master.gain.value = MASTER_GAIN;
   bgmBus = ctx.createGain();
   bgmBus.gain.value = bgmMuted ? 0 : 1;
   sfxBus = ctx.createGain();
@@ -3378,8 +3139,7 @@ function handlePianoKeyDown(event) {
     event.ctrlKey ||
     event.altKey ||
     event.metaKey ||
-    settingsOpen ||
-    unlockConfirmOpen
+    settingsOpen
   ) return;
 
   if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {

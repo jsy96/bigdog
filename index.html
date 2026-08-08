@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#fff2dc" />
 <title>大狗Tap</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>" />
-<script src="//s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js"></script>
 <style>
   /* 全页面限定调色板：米白底 + 主色黄 + 次色灰（极少点缀色） */
   :root {
@@ -1164,143 +1163,8 @@
     outline-offset: 2px;
   }
 
-  /* 已登录站内用户点击锁定项时的居中确认框。沿用设置面板的切角、米白底与琥珀色，
-     但层级更高，确保确认期间不会误触下方设置。 */
-  #unlock-confirm-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 70;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 22px;
-    background: rgba(111, 106, 99, .28);
-    backdrop-filter: blur(4px);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .22s ease;
-  }
-  #unlock-confirm-overlay.is-open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  #unlock-confirm-dialog {
-    position: relative;
-    isolation: isolate;
-    width: min(350px, 100%);
-    padding: 24px 22px 20px;
-    color: #6f6a63;
-    background: rgba(255, 180, 0, .78);
-    clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px),
-                       calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
-    filter: drop-shadow(0 18px 42px rgba(80, 76, 71, .3));
-    text-align: center;
-    transform: translateY(10px) scale(.96);
-    transition: transform .28s cubic-bezier(.2, .8, .2, 1);
-  }
-  #unlock-confirm-overlay.is-open #unlock-confirm-dialog {
-    transform: translateY(0) scale(1);
-  }
-  #unlock-confirm-dialog::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: rgba(255, 250, 240, .98);
-    clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px),
-                       calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
-  }
-  .unlock-confirm-icon {
-    width: 50px;
-    height: 50px;
-    margin: 0 auto 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fffaf0;
-    background: var(--amber);
-    clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px),
-                       calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
-    filter: drop-shadow(0 6px 12px rgba(255, 180, 0, .28));
-  }
-  .unlock-confirm-icon svg {
-    width: 26px;
-    height: 26px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .unlock-confirm-title {
-    color: var(--amber);
-    font-size: 20px;
-    font-weight: 900;
-    letter-spacing: .08em;
-  }
-  .unlock-confirm-message {
-    margin: 10px 2px 18px;
-    color: #77736e;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.65;
-  }
-  .unlock-confirm-actions {
-    display: grid;
-    grid-template-columns: .8fr 1.3fr;
-    gap: 10px;
-  }
-  .unlock-confirm-button {
-    position: relative;
-    isolation: isolate;
-    min-height: 44px;
-    padding: 9px 12px;
-    border: none;
-    color: #77736e;
-    background: rgba(135, 131, 126, .46);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    font: 750 13px/1.25 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    transition: transform .16s ease, background .2s ease;
-  }
-  .unlock-confirm-button::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: rgba(255, 255, 255, .78);
-    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-                       calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
-  }
-  .unlock-confirm-button.is-primary {
-    color: #b57e00;
-    background: rgba(255, 180, 0, .9);
-  }
-  .unlock-confirm-button.is-primary::before { background: rgba(255, 244, 224, .98); }
-  @media (hover: hover) {
-    .unlock-confirm-button:hover { background: rgba(255, 180, 0, .7); }
-  }
-  .unlock-confirm-button:active { transform: scale(.96); }
-  .unlock-confirm-button:disabled {
-    opacity: .66;
-    cursor: wait;
-  }
-  .unlock-confirm-button:focus-visible {
-    outline: 3px solid rgba(62, 123, 250, .4);
-    outline-offset: 2px;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    #unlock-confirm-overlay,
-    #unlock-confirm-dialog { transition: none; }
-  }
-
   @media (max-width: 430px) {
     #settings-overlay { padding: 14px; }
-    #unlock-confirm-overlay { padding: 16px; }
-    #unlock-confirm-dialog { padding: 22px 17px 17px; }
     .settings-scroll { padding: 12px 13px 14px; }
     .author-avatar { width: 46px; height: 46px; }
     .author-id { font-size: 15px; }
@@ -1506,25 +1370,8 @@
                 <span class="setting-switch" aria-hidden="true"></span>
               </button>
             </div>
-            <div id="performance-settings-status" role="status">正在读取哔哩哔哩云端设置…</div>
+            <div id="performance-settings-status" role="status">正在读取本地设置…</div>
           </section>
-        </div>
-      </div>
-    </div>
-
-    <div id="unlock-confirm-overlay" aria-hidden="true" inert>
-      <div id="unlock-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="unlock-confirm-title" aria-describedby="unlock-confirm-message">
-        <div class="unlock-confirm-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <rect x="5" y="10" width="14" height="10" rx="2" />
-            <path d="M8 10V7a4 4 0 018 0v3M11 14l4 2-4 2z" />
-          </svg>
-        </div>
-        <div class="unlock-confirm-title" id="unlock-confirm-title">解锁新内容</div>
-        <div class="unlock-confirm-message" id="unlock-confirm-message">观看开发视频后即可解锁，是否现在跳转？</div>
-        <div class="unlock-confirm-actions">
-          <button class="unlock-confirm-button" id="unlock-confirm-cancel" type="button">暂不</button>
-          <button class="unlock-confirm-button is-primary" id="unlock-confirm-submit" type="button">前往视频解锁</button>
         </div>
       </div>
     </div>

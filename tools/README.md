@@ -21,7 +21,6 @@ python tools/find_piano_minimax.py
 node tools/build_audio_data.mjs
 node tools/verify_runtime_mapping.mjs
 node tools/verify_interaction_queue.mjs
-node tools/verify_toy_cloud_flow.mjs
 ```
 
 第一条命令会直接分析网页实际使用的音频，其中哈基米运行时键 `ha / ji / mi`
@@ -47,12 +46,6 @@ node tools/verify_toy_cloud_flow.mjs
 排队，确认 `da / gou / jiao` 三个语义音节各自只保留最新的一个待调度项目，以及已进入
 长音的第三音节换调也进入该队列，只在当前纹理上切换播放速率而不重新播放
 开头；关闭节奏吸附后则验证每次输入都按实际按下时间立即发声且不去重。
-
-`verify_toy_cloud_flow.mjs` 会用模拟 Toy SDK 验证站内身份检测、云状态恢复、锁定音效提示、
-红点与 `NEW` 持久化、「先写入解锁状态、再跳转视频」的严格调用顺序，
-以及站外视频可直接打开但不会解锁的行为。它也覆盖钢琴模式、八度切换、起始八度、
-节奏吸附和网格显示的默认值、云端恢复/写入，连续切档只保留最新写入，以及云存储
-不可用时以默认值启动、仍允许当前页面内切换的本地降级行为。
 
 ## 透明角色循环动画
 
