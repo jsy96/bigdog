@@ -65,38 +65,90 @@ const SFX_LABEL = Object.freeze({
   hajimi: 'ha-ji-mi',
 });
 const SFX_CYCLE_ORDER = Object.freeze(['dagou', 'dingdong', 'hajimi', 'mute']);
-// 顶部形象按钮：4 种形象（含帝皇）的小图、显示名与循环顺序。
-const CHARACTER_SET_ICON = Object.freeze({
+// 顶部形象按钮：内置形象的小图、显示名与循环顺序。对象本身可变，
+// 运行时由自定义形象（bootstrapCustomCharacters / registerCharacterEntry）追加键。
+const CHARACTER_SET_ICON = {
   dagou: 'Image/dagou_close_mouth.png',
   dingdongji: 'Image/dingdongji_close_mouth.png',
   maodie: 'Image/maodie_close_mouth.png',
   emperor: 'Image/donghaidihuang_icon.webp',
-});
-const CHARACTER_SET_LABEL = Object.freeze({
+};
+const CHARACTER_SET_LABEL = {
   dagou: '大狗',
   dingdongji: '叮咚鸡',
   maodie: '哈基米',
   emperor: '帝皇',
-});
-const CHARACTER_SET_CYCLE = Object.freeze(['dagou', 'dingdongji', 'maodie', 'emperor']);
+};
+const CHARACTER_SET_CYCLE = ['dagou', 'dingdongji', 'maodie', 'emperor'];
 // 形象与音效解耦：形象按角色 id 索引。帝皇（emperor）使用独立动画，无静态图集。
-const CHARACTER_IMAGE_SETS = Object.freeze({
-  dagou: Object.freeze({
-    close: 'Image/dagou_close_mouth.png',
-    open: 'Image/dagou_open_mouth.png',
-    alt: '大狗',
-  }),
-  dingdongji: Object.freeze({
-    close: 'Image/dingdongji_close_mouth.png',
-    open: 'Image/dingdongji_open_mouth.png',
-    alt: '叮咚鸡',
-  }),
-  maodie: Object.freeze({
-    close: 'Image/maodie_close_mouth.png',
-    open: 'Image/maodie_open_mouth.png',
-    alt: '哈基米',
-  }),
-});
+// custom: true 标记本地上传的自定义形象（渲染走互斥可见，避免透明背景重影）。
+const CHARACTER_IMAGE_SETS = {
+  dagou: { close: 'Image/dagou_close_mouth.png', open: 'Image/dagou_open_mouth.png', alt: '大狗' },
+  dingdongji: { close: 'Image/dingdongji_close_mouth.png', open: 'Image/dingdongji_open_mouth.png', alt: '叮咚鸡' },
+  maodie: { close: 'Image/maodie_close_mouth.png', open: 'Image/maodie_open_mouth.png', alt: '哈基米' },
+};
+
+/* ---------- 自定义形象：本地上传闭嘴/张嘴双图，压缩后存 localStorage，运行时注入形象数据。 ---------- */
+const CUSTOM_CHARACTER_STORE_KEY = 'dagou-custom-characters-v1';
+const SELECTED_CHARACTER_STORE_KEY = 'dagou-selected-character-v1';
+const CUSTOM_CHARACTER_MAX_WIDTH = 360; // 压缩目标宽度（px），与内置形象同量级
+
+function loadCustomCharacters() {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_CHARACTER_STORE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list.filter((it) => it && it.id && it.close && it.open);
+  } catch (error) {
+    console.warn('[大狗Tap] 自定义形象读取失败。', error);
+    return [];
+  }
+}
+
+function saveCustomCharacters(list) {
+  // 配额超限会抛 QuotaExceededError，由调用方提示用户清理。
+  window.localStorage.setItem(CUSTOM_CHARACTER_STORE_KEY, JSON.stringify(list));
+}
+
+// 把一条自定义形象注册进运行时形象表，使其出现在切换循环里。
+function registerCharacterEntry(entry) {
+  CHARACTER_IMAGE_SETS[entry.id] = {
+    close: entry.close, open: entry.open, alt: entry.label, custom: true,
+  };
+  CHARACTER_SET_ICON[entry.id] = entry.close;
+  CHARACTER_SET_LABEL[entry.id] = entry.label;
+  if (!CHARACTER_SET_CYCLE.includes(entry.id)) CHARACTER_SET_CYCLE.push(entry.id);
+}
+
+function removeCharacterEntry(id) {
+  delete CHARACTER_IMAGE_SETS[id];
+  delete CHARACTER_SET_ICON[id];
+  delete CHARACTER_SET_LABEL[id];
+  const idx = CHARACTER_SET_CYCLE.indexOf(id);
+  if (idx >= 0) CHARACTER_SET_CYCLE.splice(idx, 1);
+}
+
+// 启动时把 localStorage 里的自定义形象注入形象表（须在首次显示与恢复选择之前）。
+function bootstrapCustomCharacters() {
+  for (const entry of loadCustomCharacters()) registerCharacterEntry(entry);
+}
+
+function persistSelectedCharacter() {
+  try {
+    window.localStorage.setItem(SELECTED_CHARACTER_STORE_KEY, selectedCharacterId);
+  } catch (error) {
+    console.warn('[大狗Tap] 形象选择保存失败。', error);
+  }
+}
+
+function restoreSelectedCharacter() {
+  try {
+    const saved = window.localStorage.getItem(SELECTED_CHARACTER_STORE_KEY);
+    if (saved && CHARACTER_SET_CYCLE.includes(saved)) selectedCharacterId = saved;
+  } catch (error) {
+    console.warn('[大狗Tap] 形象选择读取失败。', error);
+  }
+}
 const HAJIMI_ATLAS_URL =
   'Image/donghaidihuang_atlas.webp?v=20260721-beat-synced';
 const HAJIMI_STATIC_ICON_URL = 'Image/maodie_close_mouth.png';
@@ -271,6 +323,17 @@ const sfxSetButton = document.getElementById('sfx-set-toggle');
 const octaveToggleButton = document.getElementById('octave-toggle');
 const characterSetButton = document.getElementById('character-set-toggle');
 const characterSetIcon = document.getElementById('character-set-icon');
+const characterAddButton = document.getElementById('character-add-toggle');
+const ccmModal = document.getElementById('custom-character-modal');
+const ccmSlotClose = document.getElementById('ccm-slot-close');
+const ccmSlotOpen = document.getElementById('ccm-slot-open');
+const ccmFileInput = document.getElementById('ccm-file');
+const ccmPreview = document.getElementById('ccm-preview');
+const ccmNameInput = document.getElementById('ccm-name');
+const ccmConfirm = document.getElementById('ccm-confirm');
+const ccmCancel = document.getElementById('ccm-cancel');
+const ccmExisting = document.getElementById('ccm-existing');
+const ccmExistingList = document.getElementById('ccm-existing-list');
 const sfxSetLabel = document.getElementById('sfx-set-label');
 const sfxSetMuteIcon = document.getElementById('sfx-set-mute-icon');
 const performanceSettingButtons = [
@@ -651,8 +714,11 @@ function applyCharacterVisibility() {
   dogInner.classList.toggle('is-emperor-animation', showAnimation);
   dogAnimationCanvas.setAttribute('aria-hidden', String(!showAnimation));
 
-  // 哈基米（maodie）两张图轮廓不同，需互斥可见；其余形象用通用透明度切换。
-  dogInner.classList.toggle('is-hajimi', selectedCharacterId === 'maodie');
+  // 哈基米（maodie）与自定义形象两张图轮廓/透明区域不一致，需互斥可见，
+  // 避免透明背景叠加时下层闭嘴图透出造成重影；其余内置形象用通用透明度切换。
+  const isExclusiveMouth = selectedCharacterId === 'maodie'
+    || CHARACTER_IMAGE_SETS[selectedCharacterId]?.custom === true;
+  dogInner.classList.toggle('is-hajimi', isExclusiveMouth);
 
   if (isEmperor) {
     dogCloseImage.alt = '';
@@ -726,14 +792,213 @@ function cycleCharacterSet() {
   }
   applyCharacterVisibility();
   updateCharacterSetButton();
+  persistSelectedCharacter();
 }
 
+// 顶部形象按钮文字/图标同步当前形象（含自定义形象的小图与显示名）。
 function updateCharacterSetButton() {
   if (!characterSetButton) return;
   const icon = CHARACTER_SET_ICON[selectedCharacterId] ?? CHARACTER_SET_ICON.maodie;
   const label = CHARACTER_SET_LABEL[selectedCharacterId] ?? '哈基米';
   if (characterSetIcon) characterSetIcon.src = icon;
   characterSetButton.setAttribute('aria-label', `切换形象，当前${label}`);
+}
+
+/* ---------- 自定义形象编辑器：顶部「+」按钮打开弹层，上传双图 → 预览 → 存储 → 切换。 ---------- */
+
+// 把用户选的图片文件缩放到目标宽度（或强制目标尺寸）后输出 PNG dataURL。
+// 张嘴帧会以闭嘴帧尺寸强制对齐，保证两帧切换不跳动。
+function compressCharacterImage(file, targetWidth, targetHeight) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const probe = new Image();
+    probe.onload = () => {
+      let w;
+      let h;
+      if (targetWidth && targetHeight) {
+        w = targetWidth;
+        h = targetHeight; // 张嘴帧对齐闭嘴帧
+      } else {
+        const scale = Math.min(1, CUSTOM_CHARACTER_MAX_WIDTH / probe.naturalWidth);
+        w = Math.max(1, Math.round(probe.naturalWidth * scale));
+        h = Math.max(1, Math.round(probe.naturalHeight * scale));
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const c2d = canvas.getContext('2d');
+      c2d.clearRect(0, 0, w, h);
+      c2d.drawImage(probe, 0, 0, w, h);
+      URL.revokeObjectURL(objectUrl);
+      try {
+        resolve({ dataUrl: canvas.toDataURL('image/png'), width: w, height: h });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('图片读取失败'));
+    };
+    probe.src = objectUrl;
+  });
+}
+
+// 弹层编辑态：slot 标记当前正在选哪一帧；closeImg/openImg 为压缩后的两帧。
+const customEditorState = { slot: null, closeImg: null, openImg: null };
+
+function refreshCustomEditorSlots() {
+  for (const slot of ['close', 'open']) {
+    const btn = slot === 'close' ? ccmSlotClose : ccmSlotOpen;
+    const img = btn.querySelector('.ccm-slot-img');
+    const data = customEditorState[`${slot}Img`];
+    if (data) {
+      img.src = data.dataUrl;
+      btn.classList.add('is-filled');
+    } else {
+      img.removeAttribute('src');
+      btn.classList.remove('is-filled');
+    }
+  }
+  refreshCustomEditorPreview();
+}
+
+function refreshCustomEditorPreview() {
+  const { closeImg, openImg } = customEditorState;
+  const closeI = ccmPreview.querySelector('.ccm-preview-close');
+  const openI = ccmPreview.querySelector('.ccm-preview-open');
+  const ready = !!(closeImg && openImg);
+  if (ready) {
+    closeI.src = closeImg.dataUrl;
+    openI.src = openImg.dataUrl;
+    ccmPreview.classList.add('has-img');
+  } else {
+    closeI.removeAttribute('src');
+    openI.removeAttribute('src');
+    ccmPreview.classList.remove('has-img', 'is-open');
+  }
+  ccmConfirm.disabled = !ready;
+  ccmConfirm.classList.toggle('is-ready', ready);
+  // 闭嘴图选好后，张嘴槽位的占位文案切回可上传提示。
+  ccmSlotOpen.querySelector('.ccm-slot-ph').textContent = closeImg ? '点此选择图片' : '先选闭嘴图';
+}
+
+function pickCustomSlot(slot) {
+  // 张嘴帧必须以闭嘴帧尺寸为基准对齐，故强制先选闭嘴图。
+  if (slot === 'open' && !customEditorState.closeImg) {
+    showToyNotice('请先选择「闭嘴」图作为基准。', true);
+    return;
+  }
+  customEditorState.slot = slot;
+  ccmFileInput.value = '';
+  ccmFileInput.click();
+}
+
+async function onCustomFileChange() {
+  const file = ccmFileInput.files && ccmFileInput.files[0];
+  const slot = customEditorState.slot;
+  if (!file || !slot) return;
+  const base = customEditorState.closeImg;
+  try {
+    const result = await compressCharacterImage(
+      file,
+      slot === 'close' ? null : base.width,
+      slot === 'close' ? null : base.height,
+    );
+    customEditorState[`${slot}Img`] = result;
+    refreshCustomEditorSlots();
+  } catch (err) {
+    console.warn('[大狗Tap] 自定义形象图片处理失败。', err);
+    showToyNotice('图片读取失败，换一张试试。', true);
+  }
+}
+
+function refreshCustomExistingList() {
+  const list = loadCustomCharacters();
+  ccmExistingList.replaceChildren();
+  if (!list.length) {
+    ccmExisting.style.display = 'none';
+    return;
+  }
+  ccmExisting.style.display = '';
+  for (const entry of list) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ccm-existing-item';
+    item.setAttribute('aria-label', `删除自定义形象 ${entry.label}`);
+    const thumb = document.createElement('img');
+    thumb.src = entry.close;
+    thumb.alt = '';
+    const tag = document.createElement('span');
+    tag.textContent = `× ${entry.label}`;
+    item.append(thumb, tag);
+    item.addEventListener('click', () => removeCustomCharacter(entry.id));
+    ccmExistingList.append(item);
+  }
+}
+
+function removeCustomCharacter(id) {
+  const list = loadCustomCharacters().filter((e) => e.id !== id);
+  try {
+    saveCustomCharacters(list);
+  } catch (error) {
+    console.warn('[大狗Tap] 自定义形象删除保存失败。', error);
+    showToyNotice('删除失败，请稍后重试。', true);
+    return;
+  }
+  removeCharacterEntry(id);
+  if (selectedCharacterId === id) {
+    selectedCharacterId = 'dagou';
+    persistSelectedCharacter();
+    applyCharacterVisibility();
+    updateCharacterSetButton();
+  }
+  refreshCustomExistingList();
+  showToyNotice('已删除该自定义形象。');
+}
+
+async function confirmCustomCharacter() {
+  const { closeImg, openImg } = customEditorState;
+  if (!closeImg || !openImg || ccmConfirm.disabled) return;
+  const label = ((ccmNameInput.value || '').trim() || '自定义').slice(0, 6);
+  const entry = {
+    id: `custom-${Date.now()}`,
+    label,
+    close: closeImg.dataUrl,
+    open: openImg.dataUrl,
+  };
+  const list = loadCustomCharacters();
+  list.push(entry);
+  try {
+    saveCustomCharacters(list);
+  } catch (error) {
+    console.warn('[大狗Tap] 自定义形象保存失败。', error);
+    showToyNotice('保存失败：浏览器本地存储空间不足，可先删除旧形象。', true);
+    return;
+  }
+  registerCharacterEntry(entry);
+  selectedCharacterId = entry.id;
+  persistSelectedCharacter();
+  applyCharacterVisibility();
+  updateCharacterSetButton();
+  closeCustomCharacterModal();
+  showToyNotice(`已添加并切换到形象「${label}」。`);
+}
+
+function openCustomCharacterModal() {
+  customEditorState.slot = null;
+  customEditorState.closeImg = null;
+  customEditorState.openImg = null;
+  ccmNameInput.value = '';
+  refreshCustomEditorSlots();
+  refreshCustomExistingList();
+  ccmModal.classList.add('is-open');
+  ccmModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeCustomCharacterModal() {
+  ccmModal.classList.remove('is-open');
+  ccmModal.setAttribute('aria-hidden', 'true');
 }
 
 function resolveSfxSample(sample, sfxId = selectedSfxId) {
@@ -743,7 +1008,9 @@ function resolveSfxSample(sample, sfxId = selectedSfxId) {
 renderToyCloudState();
 const toyStateReady = initializeToyCloudState();
 
-// 初始同步形象显示（默认 maodie 形象）。
+// 先注入 localStorage 中的自定义形象，再恢复上次的形象选择，最后同步显示。
+bootstrapCustomCharacters();
+restoreSelectedCharacter();
 applyCharacterVisibility();
 
 dogAnimationAtlas.addEventListener('load', () => {
@@ -894,6 +1161,18 @@ function updateOctaveButton() {
 /* 三套音效都保留 da / gou / jiao 的语义位置，只替换实际播放采样。 */
 sfxSetButton.addEventListener('click', cycleSfx);
 characterSetButton.addEventListener('click', cycleCharacterSet);
+characterAddButton.addEventListener('click', openCustomCharacterModal);
+ccmSlotClose.addEventListener('click', () => pickCustomSlot('close'));
+ccmSlotOpen.addEventListener('click', () => pickCustomSlot('open'));
+ccmFileInput.addEventListener('change', onCustomFileChange);
+ccmPreview.addEventListener('click', () => {
+  if (ccmPreview.classList.contains('has-img')) ccmPreview.classList.toggle('is-open');
+});
+ccmConfirm.addEventListener('click', confirmCustomCharacter);
+ccmCancel.addEventListener('click', closeCustomCharacterModal);
+ccmModal.addEventListener('click', (event) => {
+  if (event.target === ccmModal) closeCustomCharacterModal();
+});
 octaveToggleButton.addEventListener('click', cyclePianoOctave);
 
 /* ---------- 和弦走向：C - G - Am - F（简单洗脑） ---------- */
