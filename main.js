@@ -831,6 +831,8 @@ function compressCharacterImage(file, targetWidth, targetHeight) {
       c2d.clearRect(0, 0, w, h);
       c2d.drawImage(probe, 0, 0, w, h);
       URL.revokeObjectURL(objectUrl);
+      // 去白底：把白色背景改成透明，便于角色在彩色背景上显示。
+      removeWhiteBackground(c2d, w, h);
       try {
         resolve({ dataUrl: canvas.toDataURL('image/png'), width: w, height: h });
       } catch (err) {
@@ -843,6 +845,39 @@ function compressCharacterImage(file, targetWidth, targetHeight) {
     };
     probe.src = objectUrl;
   });
+}
+
+// 去白底：从图片四边做 flood fill，把与边缘连通的"近白"像素改为透明。
+// 只去背景白，不误伤被角色包围的白色部位（如白肚皮）；用栈迭代避免递归栈溢出。
+const WHITE_BG_THRESHOLD = 240; // RGB 三通道均 >= 此值视为白（容忍 JPEG 压缩噪点）
+function removeWhiteBackground(c2d, w, h) {
+  const imageData = c2d.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  const isWhitish = (offset) =>
+    data[offset] >= WHITE_BG_THRESHOLD &&
+    data[offset + 1] >= WHITE_BG_THRESHOLD &&
+    data[offset + 2] >= WHITE_BG_THRESHOLD;
+  const visited = new Uint8Array(w * h);
+  const stack = [];
+  const seed = (x, y) => {
+    if (isWhitish((y * w + x) * 4)) stack.push(x, y);
+  };
+  for (let x = 0; x < w; x++) { seed(x, 0); seed(x, h - 1); }
+  for (let y = 0; y < h; y++) { seed(0, y); seed(w - 1, y); }
+  while (stack.length) {
+    const y = stack.pop();
+    const x = stack.pop();
+    const p = y * w + x;
+    if (visited[p]) continue;
+    visited[p] = 1;
+    if (!isWhitish(p * 4)) continue;
+    data[p * 4 + 3] = 0; // 改为透明
+    if (x > 0 && !visited[p - 1]) stack.push(x - 1, y);
+    if (x < w - 1 && !visited[p + 1]) stack.push(x + 1, y);
+    if (y > 0 && !visited[p - w]) stack.push(x, y - 1);
+    if (y < h - 1 && !visited[p + w]) stack.push(x, y + 1);
+  }
+  c2d.putImageData(imageData, 0, 0);
 }
 
 // 把已有的 dataURL 图片重绘到指定尺寸，输出新 dataURL；保存时用它把张嘴帧对齐到闭嘴帧。
