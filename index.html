@@ -46,59 +46,6 @@
     pointer-events: none;
   }
 
-  /* 常驻作者署名：始终位于页面最前层。
-     两行严格等宽；Created by 整体跟拍，MarkCup 每拍依次放大一个字母。 */
-  #author-link {
-    position: absolute;
-    right: max(18px, env(safe-area-inset-right));
-    bottom: max(16px, env(safe-area-inset-bottom));
-    z-index: 30;
-    padding: 10px 12px 11px;
-    display: block;
-    pointer-events: none;
-    user-select: none;
-  }
-  .author-copy {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 124px;
-    gap: 5px;
-  }
-  .author-label,
-  .author-name {
-    width: 100%;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-  }
-  .author-label {
-    color: rgba(255, 180, 0, .78);
-    font: 600 9px/1 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    white-space: nowrap;
-    transform-origin: 50% 70%;
-    transform:
-      translateY(var(--author-lift, 0px))
-      scale(var(--author-rhythm-scale, 1));
-    transition: color .22s ease;
-  }
-  .author-name {
-    width: calc(100% + 6px);
-    margin-left: -3px;
-    color: var(--amber);
-    font: 700 20px/1.15 "Noto Serif SC", "Songti SC", SimSun, serif;
-    letter-spacing: 0;
-    white-space: nowrap;
-    transition: color .22s ease;
-  }
-  /* JS 将两行拆成等距字符；仅 MarkCup 字母逐拍放大 */
-  .author-letter {
-    display: inline-block;
-    transform-origin: 50% 72%;
-    will-change: transform;
-  }
   /* 分区按钮闪光层：点击/滑过时分区短暂显示半透明白色再淡出 */
   #zoneflash {
     position: absolute;
@@ -124,95 +71,6 @@
     background: rgba(255, 255, 255, .025);
   }
 
-  /* 钢琴八度切换：覆盖在逻辑网格边缘，不改变原有分区与特效坐标。
-     横屏左右、竖屏上下；克制的米白玻璃底与低饱和琥珀只提示方向。 */
-  #octave-controls {
-    position: absolute;
-    inset: 0;
-    z-index: 12;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity .2s ease, visibility 0s linear .2s;
-  }
-  #octave-controls.is-visible {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0s;
-  }
-  .octave-control {
-    position: absolute;
-    border: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    color: rgba(111, 106, 99, .72);
-    background: rgba(255, 250, 240, .54);
-    box-shadow: inset 0 0 0 1px rgba(135, 131, 126, .16);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-    font: 650 clamp(10px, 1.25vmin, 12px)/1 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    letter-spacing: .04em;
-    cursor: pointer;
-    pointer-events: auto;
-    touch-action: manipulation;
-    transition: background .18s ease, color .18s ease, opacity .18s ease;
-  }
-  .octave-control:focus-visible {
-    outline: 2px solid rgba(62, 123, 250, .32);
-    outline-offset: -3px;
-  }
-  .octave-control:disabled {
-    opacity: .34;
-    cursor: default;
-  }
-  .octave-arrow {
-    color: rgba(255, 180, 0, .62);
-    font-size: 1.18em;
-    font-weight: 800;
-  }
-  .octave-target { color: rgba(181, 126, 0, .68); }
-  #octave-controls:not(.is-landscape) .octave-control {
-    left: 0;
-    width: 100%;
-    min-height: 30px;
-    height: clamp(30px, 4.5vh, 40px);
-    flex-direction: row;
-  }
-  #octave-controls:not(.is-landscape) #octave-up {
-    top: 0;
-    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-  }
-  #octave-controls:not(.is-landscape) #octave-down {
-    bottom: 0;
-    padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left));
-  }
-  #octave-controls.is-landscape .octave-control {
-    top: 0;
-    height: 100%;
-    min-width: 30px;
-    width: clamp(30px, 3.6vw, 42px);
-    flex-direction: column;
-  }
-  #octave-controls.is-landscape #octave-down {
-    left: 0;
-    padding: max(10px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom)) env(safe-area-inset-left);
-  }
-  #octave-controls.is-landscape #octave-up {
-    right: 0;
-    padding: max(10px, env(safe-area-inset-top)) env(safe-area-inset-right) max(10px, env(safe-area-inset-bottom)) 0;
-  }
-  @media (hover: hover) {
-    .octave-control:not(:disabled):hover {
-      color: rgba(111, 106, 99, .9);
-      background: rgba(255, 250, 240, .72);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    #octave-controls,
-    .octave-control { transition: none; }
-  }
   .zone-flash {
     position: absolute;
     background: #fff;
@@ -285,11 +143,11 @@
     transform: translate(-50%, -50%);
     transition: none;
   }
-  #dog-inner.is-hajimi.is-hajimi-animation #dog-close,
-  #dog-inner.is-hajimi.is-hajimi-animation #dog-open {
+  #dog-inner.is-emperor-animation #dog-close,
+  #dog-inner.is-emperor-animation #dog-open {
     visibility: hidden;
   }
-  #dog-inner.is-hajimi.is-hajimi-animation #dog-animation {
+  #dog-inner.is-emperor-animation #dog-animation {
     opacity: 1;
     visibility: visible;
   }
@@ -324,17 +182,6 @@
     opacity: 1;
     transform: translateY(0);
     transition: opacity .5s ease, transform .5s cubic-bezier(.2, .8, .2, 1);
-  }
-  #top-controls.has-update-dot:not(.is-visible) {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  #top-controls.has-update-dot:not(.is-visible) #audio-controls {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  #top-controls.has-update-dot:not(.is-visible) #audio-controls .control-button {
-    pointer-events: none;
   }
   .control-group {
     display: flex;
@@ -397,6 +244,13 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  /* 顶部音效按钮里的角色小图（替代 svg 图标）：与 svg 同尺寸、同投影手感。 */
+  .control-button img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 3px rgba(135, 131, 126, .35));
+  }
   .control-button .mute-slash {
     opacity: 0;
     stroke: var(--coral);
@@ -409,89 +263,13 @@
     color: var(--coral);
   }
   .control-button.is-muted .mute-slash { opacity: 1; }
+  /* 演奏开关按钮（钢琴 / 八度）开启态：琥珀描边 + 淡黄底，表示已激活。 */
+  .control-button.is-active {
+    --btn-edge: rgba(255, 180, 0, .9);
+    --btn-fill: rgba(255, 244, 224, .94);
+    color: #b57e00;
+  }
 
-  /* 设置按钮红点：八边形呼应几何特效，珊瑚色点缀；外圈米白描边让它从按钮上跳出来。
-     律动缩放由 JS 随节拍写入 --rhythm-scale（同控制按钮）。 */
-  #settings-wrap { position: relative; }
-  #update-dot {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    z-index: 2;
-    width: 15px;
-    height: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 250, 240, .96);
-    clip-path: polygon(32% 0, 68% 0, 100% 32%, 100% 68%, 68% 100%, 32% 100%, 0 68%, 0 32%);
-    filter: drop-shadow(0 0 3px rgba(255, 90, 95, .55));
-    pointer-events: none;
-    transform: scale(var(--rhythm-scale, 1));
-    will-change: transform;
-  }
-  #update-dot::before {
-    content: "";
-    width: 9px;
-    height: 9px;
-    background: var(--coral);
-    clip-path: polygon(32% 0, 68% 0, 100% 32%, 100% 68%, 68% 100%, 32% 100%, 0 68%, 0 32%);
-  }
-  #update-dot.is-hidden { display: none; }
-
-  /* 新用户引导气泡：跟随设置红点同生共灭（#top-controls.has-update-dot），
-     醒目箭头指向设置按钮；只做展示，绝不拦截点击。 */
-  #settings-hint {
-    position: absolute;
-    top: calc(100% + 9px);
-    right: 0;
-    z-index: 3;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(-6px) scale(.92);
-    transform-origin: top right;
-    filter: drop-shadow(0 6px 12px rgba(255, 180, 0, .38));
-    transition: opacity .3s ease, transform .34s cubic-bezier(.34, 1.4, .4, 1);
-  }
-  #top-controls.has-update-dot #settings-hint {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  .settings-hint-bob {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    animation: settingsHintBob 1.5s ease-in-out infinite;
-  }
-  @keyframes settingsHintBob {
-    50% { transform: translateY(-4px); }
-  }
-  .settings-hint-arrow {
-    width: 20px;
-    height: 24px;
-    margin-right: 17px;
-    margin-bottom: -2px;
-    color: var(--amber);
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .settings-hint-bubble {
-    padding: 8px 13px 9px;
-    color: #fffaf0;
-    background: var(--amber);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    font: 750 12px/1.55 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    letter-spacing: .04em;
-    text-align: center;
-    white-space: nowrap;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .settings-hint-bob { animation: none; }
-  }
 
   /* Toy SDK 状态提示：不打断演奏，也不会把点击穿透到舞台。 */
   #toy-notice {
@@ -534,19 +312,9 @@
       padding-inline: 10px;
     }
     .control-button span { display: none; }
-    #author-link {
-      right: max(10px, env(safe-area-inset-right));
-      bottom: max(10px, env(safe-area-inset-bottom));
-      min-width: 0;
-      max-width: calc(100% - 20px);
-      padding: 8px 9px 7px 12px;
-    }
-    .author-copy { width: 106px; }
-    .author-name {
-      width: calc(100% + 4px);
-      margin-left: -2px;
-      font-size: 15px;
-    }
+    /* 音效选择按钮保留音效名（关键状态），不随其他按钮收成纯图标。 */
+    .control-button.sfx-set-button span,
+    .control-button.character-set-button span { display: inline; }
   }
 
   /* 开始遮罩（首次点击解锁音频） */
@@ -579,621 +347,13 @@
   }
   @keyframes pulse { 50% { opacity: .35; } }
 
-  /* 设置菜单：与开始遮罩同款的半透明米白背景，盖在所有常驻元素之上 */
-  #settings-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 22px;
-    background: rgba(255, 242, 220, .88);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .28s ease;
-  }
-  #settings-overlay.is-open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  /* 面板沿用控制按钮的切角描边手法：外框充当描边色，::before 铺底色 */
-  #settings-panel {
-    position: relative;
-    width: min(384px, 100%);
-    background: rgba(135, 131, 126, .5);
-    clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px),
-                       calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
-    filter: drop-shadow(0 14px 34px rgba(135, 131, 126, .3));
-    transform: translateY(10px) scale(.97);
-    transition: transform .32s cubic-bezier(.2, .8, .2, 1);
-  }
-  #settings-overlay.is-open #settings-panel {
-    transform: translateY(0) scale(1);
-  }
-  #settings-panel::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: rgba(255, 250, 240, .97);
-    clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px),
-                       calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
-  }
-  .settings-scroll {
-    max-height: min(740px, calc(100vh - 44px));
-    overflow-y: auto;
-    padding: 14px 16px 16px;
-    /* 细滚动条：透明轨道 + 琥珀色滑块，不得不滚动时也保持简洁美观 */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 180, 0, .45) transparent;
-  }
-  .settings-scroll::-webkit-scrollbar { width: 6px; }
-  .settings-scroll::-webkit-scrollbar-track { background: transparent; }
-  .settings-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 180, 0, .45);
-    border-radius: 999px;
-  }
-  .settings-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 180, 0, .7);
-  }
-  .settings-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-  }
-  .settings-title {
-    font-size: 19px;
-    font-weight: 900;
-    letter-spacing: .3em;
-    color: var(--amber);
-  }
-  .settings-title em { font-style: normal; color: var(--gray); }
-  #settings-close {
-    min-width: 40px;
-    min-height: 36px;
-    padding: 6px;
-  }
-  .settings-section { margin-top: 10px; }
-  .settings-section:first-of-type { margin-top: 0; }
-  .settings-label {
-    margin-bottom: 6px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .24em;
-    color: rgba(135, 131, 126, .78);
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  /* 演奏设置：整行可点的切角行（同音效卡的描边/底色手法），右侧几何开关。
-     开启时行底变淡黄、描边与开关变琥珀色，与音效选中态同一语言。 */
-  .performance-settings {
-    display: grid;
-    gap: 6px;
-  }
-  .setting-row {
-    --btn-edge: rgba(135, 131, 126, .42);
-    --btn-fill: rgba(255, 255, 255, .62);
-    position: relative;
-    isolation: isolate;   /* 让 ::before 底色保持在描边之上、内容之下 */
-    width: 100%;
-    min-height: 50px;
-    padding: 8px 12px;
-    border: none;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--gray);
-    background: var(--btn-edge);
-    clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px),
-                       calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    transition: background .2s ease, opacity .2s ease;
-  }
-  .setting-row[hidden] { display: none; }
-  .setting-row::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: var(--btn-fill);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    transition: background .2s ease;
-  }
-  @media (hover: hover) {
-    .setting-row:not(:disabled):hover { --btn-edge: rgba(255, 180, 0, .72); }
-  }
-  .setting-row:focus-visible {
-    outline: 3px solid rgba(62, 123, 250, .34);
-    outline-offset: 2px;
-  }
-  .setting-row:disabled {
-    opacity: .58;
-    cursor: not-allowed;
-  }
-  .setting-row[aria-checked="true"] {
-    --btn-edge: rgba(255, 180, 0, .78);
-    --btn-fill: rgba(255, 244, 224, .96);
-  }
-  .setting-copy {
-    flex: 1;
-    min-width: 0;
-  }
-  .setting-name {
-    display: block;
-    color: #6f6a63;
-    font-size: 13px;
-    font-weight: 750;
-    line-height: 1.35;
-  }
-  .setting-row[aria-checked="true"] .setting-name { color: #b57e00; }
-  .setting-description {
-    display: block;
-    margin-top: 2px;
-    color: rgba(135, 131, 126, .82);
-    font-size: 11px;
-    line-height: 1.4;
-  }
-  /* 几何开关：八边形轨道 + 八边形滑块，滑块中央的状态点随档位变色 */
-  .setting-switch {
-    position: relative;
-    flex: none;
-    width: 46px;
-    height: 26px;
-    background: rgba(135, 131, 126, .38);
-    clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px),
-                       calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
-    transition: background .22s ease;
-  }
-  .setting-switch::after {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 4px;
-    width: 18px;
-    height: 18px;
-    background: #fffaf0;
-    clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px),
-                       calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
-    filter: drop-shadow(0 2px 3px rgba(80, 76, 71, .3));
-    transition: transform .22s cubic-bezier(.2, .8, .2, 1);
-  }
-  .setting-switch::before {
-    content: "";
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 1;
-    width: 6px;
-    height: 6px;
-    background: rgba(135, 131, 126, .5);
-    clip-path: polygon(32% 0, 68% 0, 100% 32%, 100% 68%, 68% 100%, 32% 100%, 0 68%, 0 32%);
-    transition: transform .22s cubic-bezier(.2, .8, .2, 1), background .2s ease;
-  }
-  .setting-row[aria-checked="true"] .setting-switch { background: var(--amber); }
-  .setting-row[aria-checked="true"] .setting-switch::after { transform: translateX(20px); }
-  .setting-row[aria-checked="true"] .setting-switch::before {
-    transform: translateX(20px);
-    background: rgba(255, 180, 0, .9);
-  }
-  #performance-settings-status {
-    margin-top: 6px;
-    padding: 0 2px;
-    color: rgba(135, 131, 126, .78);
-    font-size: 10px;
-    line-height: 1.45;
-  }
-  #performance-settings-status.is-error { color: #9e4145; }
-
-  /* 作者卡：八边形头像 + 主页按钮 */
-  .author-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .author-avatar {
-    flex: none;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 180, 0, .65);
-    clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px),
-                       calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
-  }
-  .author-avatar img {
-    width: calc(100% - 4px);
-    height: calc(100% - 4px);
-    object-fit: cover;
-    clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px),
-                       calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
-  }
-  .author-info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .author-id {
-    font: 700 17px/1.25 "Noto Serif SC", "Songti SC", SimSun, serif;
-    color: var(--amber);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .author-sub {
-    font-size: 10px;
-    letter-spacing: .18em;
-    color: rgba(135, 131, 126, .78);
-    text-transform: uppercase;
-  }
-  #author-home-button {
-    min-width: 64px;
-    min-height: 38px;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  /* 开发视频卡：16:9 封面 + 播放角标 + 标题 */
-  .video-card {
-    display: block;
-    width: 100%;
-    padding: 0;
-    border: none;
-    background: none;
-    text-align: left;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .video-cover {
-    position: relative;
-    display: block;
-    aspect-ratio: 16 / 9;
-    overflow: hidden;
-    background: rgba(135, 131, 126, .35);
-    clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px),
-                       calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
-  }
-  .video-cover::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: 1;
-    pointer-events: none;
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-  }
-  .video-cover img {
-    position: absolute;
-    inset: 2px;
-    width: calc(100% - 4px);
-    height: calc(100% - 4px);
-    object-fit: cover;
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    transition: transform .35s ease;
-  }
-  .video-play {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    z-index: 2;
-    width: 46px;
-    height: 46px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 250, 240, .88);
-    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-    transform: translate(-50%, -50%) scale(var(--rhythm-scale, 1));
-    will-change: transform;
-  }
-  .video-play svg {
-    width: 20px;
-    height: 20px;
-    margin-left: 2px;
-    fill: var(--amber);
-    stroke: none;
-  }
-  .video-title {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    margin-top: 7px;
-    padding: 0 2px;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.5;
-    color: #6f6a63;
-    transition: color .2s ease;
-  }
-  @media (hover: hover) {
-    .video-card:hover .video-cover img { transform: scale(1.04); }
-    .video-card:hover .video-title { color: var(--amber); }
-  }
-  .video-card:focus-visible {
-    outline: 3px solid rgba(62, 123, 250, .38);
-    outline-offset: 2px;
-  }
-
-  /* 音效三选一：切角小卡，选中态描边变琥珀色 */
-  .sfx-options {
-    display: flex;
-    gap: 10px;
-  }
-  .sfx-option {
-    --btn-edge: rgba(135, 131, 126, .45);
-    --btn-fill: rgba(255, 255, 255, .6);
-    position: relative;
-    isolation: isolate;   /* 让 ::before 底色保持在描边之上、内容之下 */
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 4px 9px;
-    border: none;
-    color: var(--gray);
-    background: var(--btn-edge);
-    clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px),
-                       calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
-    font: 600 12px/1 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    transition: color .2s ease, background .2s ease;
-  }
-  .sfx-option::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: var(--btn-fill);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    transition: background .2s ease;
-  }
-  .sfx-option.is-active {
-    --btn-edge: rgba(255, 180, 0, .92);
-    --btn-fill: rgba(255, 244, 224, .96);   /* 淡黄底 + 琥珀描边，呼应控制按钮的浅色语言 */
-    color: #d88f00;
-  }
-  .sfx-option.is-locked {
-    --btn-edge: rgba(135, 131, 126, .42);
-    --btn-fill: rgba(242, 239, 233, .94);
-  }
-  .sfx-option.is-locked .sfx-icon,
-  .sfx-option.is-locked .sfx-name { opacity: .52; }
-  .sfx-status {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    pointer-events: none;
-  }
-  .sfx-new {
-    padding: 3px 5px 2px;
-    color: #fffaf0;
-    background: var(--coral);
-    border-radius: 999px;
-    font-size: 8px;
-    font-weight: 900;
-    line-height: 1;
-    letter-spacing: .08em;
-    box-shadow: 0 2px 6px rgba(255, 90, 95, .28);
-  }
-  .sfx-lock {
-    width: 19px;
-    height: 19px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #77736e;
-    background: rgba(255, 250, 240, .94);
-    border-radius: 50%;
-    box-shadow: 0 2px 6px rgba(135, 131, 126, .24);
-  }
-  .sfx-lock svg {
-    width: 11px;
-    height: 11px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .sfx-option:not(.is-locked) .sfx-lock,
-  .skin-option:not(.is-locked) .sfx-lock,
-  .sfx-option.is-new-hidden .sfx-new,
-  .skin-option.is-new-hidden .sfx-new { display: none; }
-  .sfx-icon {
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .sfx-icon img {
-    width: 42px;
-    height: 42px;
-    object-fit: contain;
-    filter: drop-shadow(0 4px 8px rgba(135, 131, 126, .35));
-  }
-  .sfx-icon svg {
-    width: 36px;
-    height: 36px;
-    overflow: visible;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .sfx-option:active { transform: scale(.96); }
-  .sfx-option:focus-visible {
-    outline: 3px solid rgba(62, 123, 250, .38);
-    outline-offset: 2px;
-  }
-
-  /* 哈基米形象切换：仅选中哈基米时展开的横向两档切角卡。
-     帝皇的锁只挂在帝皇卡上，哈基米音效卡本身永不显示锁，避免“音效被锁”的歧义。 */
-  .skin-switcher {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transform: translateY(-4px);
-    pointer-events: none;
-    transition:
-      grid-template-rows .32s cubic-bezier(.2, .8, .2, 1),
-      opacity .24s ease,
-      transform .32s cubic-bezier(.2, .8, .2, 1);
-  }
-  .skin-switcher.is-open {
-    grid-template-rows: 1fr;
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-  .skin-switcher-inner {
-    min-height: 0;
-    overflow: hidden;
-  }
-  .skin-switcher-label {
-    margin-top: 10px;
-  }
-  .skin-options {
-    display: flex;
-    gap: 10px;
-  }
-  .skin-option {
-    --btn-edge: rgba(135, 131, 126, .45);
-    --btn-fill: rgba(255, 255, 255, .6);
-    position: relative;
-    isolation: isolate;   /* 让 ::before 底色保持在描边之上、内容之下 */
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 7px 10px;
-    border: none;
-    color: var(--gray);
-    background: var(--btn-edge);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    font: 600 12px/1.25 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    transition: color .2s ease, background .2s ease;
-  }
-  .skin-option::before {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    z-index: -1;
-    background: var(--btn-fill);
-    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-                       calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
-    transition: background .2s ease;
-  }
-  @media (hover: hover) {
-    .skin-option:not(:disabled):hover { --btn-edge: rgba(255, 180, 0, .72); }
-  }
-  .skin-option.is-active {
-    --btn-edge: rgba(255, 180, 0, .92);
-    --btn-fill: rgba(255, 244, 224, .96);   /* 与音效选中态同一语言：淡黄底 + 琥珀描边 */
-  }
-  .skin-option.is-locked {
-    --btn-edge: rgba(135, 131, 126, .42);
-    --btn-fill: rgba(242, 239, 233, .94);
-  }
-  .skin-option.is-locked .skin-icon { opacity: .52; }
-  .skin-icon {
-    flex: none;
-    width: 34px;
-    height: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .skin-icon img {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
-    filter: drop-shadow(0 3px 6px rgba(135, 131, 126, .35));
-  }
-  .skin-copy {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    text-align: left;
-  }
-  .skin-name {
-    color: #6f6a63;
-    font-size: 12px;
-    font-weight: 750;
-  }
-  .skin-option.is-active .skin-name { color: #d88f00; }
-  .skin-hint {
-    font-size: 10px;
-    line-height: 1.3;
-    color: rgba(135, 131, 126, .82);
-  }
-  .skin-option.is-locked .skin-hint { color: #b57e00; }
-  .skin-option:active { transform: scale(.96); }
-  .skin-option:focus-visible {
-    outline: 3px solid rgba(62, 123, 250, .38);
-    outline-offset: 2px;
-  }
-
-  @media (max-width: 430px) {
-    #settings-overlay { padding: 14px; }
-    .settings-scroll { padding: 12px 13px 14px; }
-    .author-avatar { width: 46px; height: 46px; }
-    .author-id { font-size: 15px; }
-  }
 </style>
 </head>
 <body>
   <div id="stage">
     <canvas id="fx"></canvas>
-    <div id="author-link" aria-hidden="true">
-      <span class="author-copy" aria-hidden="true">
-        <span class="author-label">Created by</span>
-        <span class="author-name">MarkCup</span>
-      </span>
-    </div>
     <div id="key-grid" aria-hidden="true"></div>
     <div id="zoneflash"></div>
-    <div id="octave-controls" aria-label="钢琴八度切换" aria-hidden="true" inert>
-      <button id="octave-down" class="octave-control" type="button" aria-label="降低八度">
-        <span class="octave-current">C4</span>
-        <span class="octave-arrow" aria-hidden="true">←</span>
-        <span class="octave-target">C3</span>
-      </button>
-      <button id="octave-up" class="octave-control" type="button" aria-label="提高八度">
-        <span class="octave-current">C4</span>
-        <span class="octave-arrow" aria-hidden="true">→</span>
-        <span class="octave-target">C5</span>
-      </button>
-    </div>
 
     <div id="dog">
       <div id="dog-inner" class="is-hajimi">
@@ -1206,7 +366,7 @@
     </div>
     <img id="dog-animation-atlas" alt="" hidden decoding="async" fetchpriority="low" />
 
-    <div id="top-controls" class="is-visible has-update-dot" aria-label="声音与导航控制">
+    <div id="top-controls" class="is-visible" aria-label="声音控制">
       <div id="audio-controls" class="control-group">
         <button id="music-toggle" class="control-button" type="button" aria-label="关闭音乐" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1217,162 +377,32 @@
           </svg>
           <span>音乐</span>
         </button>
-        <button id="sfx-toggle" class="control-button" type="button" aria-label="关闭音效" aria-pressed="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+        <button id="sfx-set-toggle" class="control-button sfx-set-button" type="button" aria-label="切换音效，当前 ha-ji-mi">
+          <svg id="sfx-set-mute-icon" class="sfx-set-mute-icon" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
             <path d="M5 9v6h4l5 4V5L9 9H5z" />
             <path d="M17 9.5a4 4 0 010 5" />
-            <path class="mute-slash" d="M4 3l16 18" />
+            <path d="M4 3l16 18" />
           </svg>
-          <span>音效</span>
+          <span id="sfx-set-label">ha-ji-mi</span>
         </button>
-      </div>
-      <div id="settings-wrap">
-        <button id="settings-button" class="control-button" type="button" aria-label="打开设置菜单" aria-haspopup="dialog">
+        <button id="character-set-toggle" class="control-button character-set-button" type="button" aria-label="切换形象，当前哈基米">
+          <img id="character-set-icon" class="character-set-icon" src="Image/maodie_close_mouth.png" alt="" draggable="false" />
+        </button>
+        <button id="piano-mode-toggle" class="control-button perf-toggle" type="button" role="switch" aria-checked="false" data-setting="pianoMode" aria-label="钢琴模式" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="3.4" />
-            <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+            <rect x="4" y="5" width="16" height="14" rx="1" />
+            <path d="M9 5v8M15 5v8" />
           </svg>
-          <span>设置</span>
+          <span>钢琴</span>
         </button>
-        <i id="update-dot" aria-hidden="true"></i>
-        <div id="settings-hint" aria-hidden="true">
-          <div class="settings-hint-bob">
-            <svg class="settings-hint-arrow" viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6" /></svg>
-            <span class="settings-hint-bubble">点击设置<br />切换大狗叫音效</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="settings-overlay" aria-hidden="true" inert>
-      <div id="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
-        <div class="settings-scroll">
-          <div class="settings-head">
-            <div class="settings-title">设<em>置</em></div>
-            <button id="settings-close" class="control-button" type="button" aria-label="关闭设置">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-
-          <section class="settings-section" aria-label="作者">
-            <div class="settings-label">作者 · Creator</div>
-            <div class="author-card">
-              <span class="author-avatar"><img src="Image/creator-avatar.jpg" alt="马克杯MarkCup 的头像" draggable="false" /></span>
-              <div class="author-info">
-                <div class="author-id">马克杯MarkCup</div>
-                <div class="author-sub">bilibili 创作者</div>
-              </div>
-              <button id="author-home-button" class="control-button" type="button" aria-label="前往作者哔哩哔哩主页">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 11.5L12 4l8 7.5" />
-                  <path d="M6.5 10v9.5h11V10" />
-                </svg>
-                主页
-              </button>
-            </div>
-          </section>
-
-          <section class="settings-section" aria-label="开发视频">
-            <div class="settings-label">开发视频 · Dev Video</div>
-            <button id="video-card" class="video-card" type="button" aria-label="打开视频：点击即玩世界上最爽的大狗叫模拟器">
-              <span class="video-cover">
-                <img src="Image/video.png" alt="开发视频封面" draggable="false" />
-                <span class="video-play" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M9 7l8 5-8 5z" /></svg>
-                </span>
-              </span>
-              <span class="video-title">点击即玩世界上最爽的大狗叫模拟器</span>
-            </button>
-          </section>
-
-          <section class="settings-section" aria-label="音效">
-            <div class="settings-label">音效 · Sound</div>
-            <div class="sfx-options" role="radiogroup" aria-label="音效选择">
-              <button class="sfx-option" type="button" role="radio" aria-checked="false" data-sfx="dagou">
-                <span class="sfx-icon"><img src="Image/dagou_close_mouth.png" alt="" draggable="false" /></span>
-                <span class="sfx-name">大狗叫</span>
-              </button>
-              <button class="sfx-option is-locked" type="button" role="radio" aria-checked="false" aria-label="叮咚鸡，未解锁" data-sfx="dingdong">
-                <span class="sfx-status" aria-hidden="true">
-                  <span class="sfx-new">NEW</span>
-                  <span class="sfx-lock"><svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="2" /><path d="M5 7V5a3 3 0 016 0v2" /></svg></span>
-                </span>
-                <span class="sfx-icon">
-                  <img src="Image/dingdongji_close_mouth.png" alt="" draggable="false" />
-                </span>
-                <span class="sfx-name">叮咚鸡</span>
-              </button>
-              <button class="sfx-option is-active" type="button" role="radio" aria-checked="true" aria-label="哈基米音效已启用" data-sfx="hajimi">
-                <span class="sfx-icon">
-                  <img id="hajimi-option-image" src="Image/maodie_close_mouth.png" alt="" draggable="false" />
-                </span>
-                <span class="sfx-name">哈基米</span>
-              </button>
-            </div>
-            <div class="skin-switcher is-open" id="hajimi-skin-switcher" aria-hidden="false">
-              <div class="skin-switcher-inner">
-                <div class="settings-label skin-switcher-label">哈基米形象 · Skin</div>
-                <div class="skin-options" role="radiogroup" aria-label="哈基米形象选择">
-                  <button class="skin-option is-active" type="button" role="radio" aria-checked="true" aria-label="原皮，哈基米默认形象" data-skin="classic">
-                    <span class="skin-icon"><img src="Image/maodie_close_mouth.png" alt="" draggable="false" /></span>
-                    <span class="skin-copy">
-                      <span class="skin-name">原皮</span>
-                      <span class="skin-hint">默认形象</span>
-                    </span>
-                  </button>
-                  <button class="skin-option is-locked" type="button" role="radio" aria-checked="false" aria-label="哈基米帝皇形象，观看开发视频后解锁" data-skin="emperor">
-                    <span class="sfx-status" aria-hidden="true">
-                      <span class="sfx-new">NEW</span>
-                      <span class="sfx-lock"><svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="2" /><path d="M5 7V5a3 3 0 016 0v2" /></svg></span>
-                    </span>
-                    <span class="skin-icon"><img src="Image/donghaidihuang_icon.webp" alt="" draggable="false" /></span>
-                    <span class="skin-copy">
-                      <span class="skin-name">帝皇</span>
-                      <span class="skin-hint">观看开发视频后解锁</span>
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="settings-section" aria-label="演奏设置">
-            <div class="settings-label">演奏 · Performance</div>
-            <div class="performance-settings">
-              <button class="setting-row" id="piano-mode-setting" type="button" role="switch" aria-checked="false" data-setting="pianoMode" disabled>
-                <span class="setting-copy">
-                  <span class="setting-name">钢琴模式</span>
-                  <span class="setting-description">开放一个八度的音阶</span>
-                </span>
-                <span class="setting-switch" aria-hidden="true"></span>
-              </button>
-              <button class="setting-row" id="octave-switching-setting" type="button" role="switch" aria-checked="false" data-setting="octaveSwitching" hidden disabled>
-                <span class="setting-copy">
-                  <span class="setting-name">八度切换</span>
-                  <span class="setting-description">在屏幕边缘切换 C3–C6 起始八度</span>
-                </span>
-                <span class="setting-switch" aria-hidden="true"></span>
-              </button>
-              <button class="setting-row" id="rhythm-snap-setting" type="button" role="switch" aria-checked="true" data-setting="rhythmSnap" disabled>
-                <span class="setting-copy">
-                  <span class="setting-name">强化节奏</span>
-                  <span class="setting-description">启用节奏吸附</span>
-                </span>
-                <span class="setting-switch" aria-hidden="true"></span>
-              </button>
-              <button class="setting-row" id="show-grid-setting" type="button" role="switch" aria-checked="false" data-setting="showGrid" disabled>
-                <span class="setting-copy">
-                  <span class="setting-name">显示网格</span>
-                  <span class="setting-description">显示按键的网格</span>
-                </span>
-                <span class="setting-switch" aria-hidden="true"></span>
-              </button>
-            </div>
-            <div id="performance-settings-status" role="status">正在读取本地设置…</div>
-          </section>
-        </div>
+        <button id="octave-toggle" class="control-button" type="button" aria-label="切换八度，当前 C4" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4v16" />
+            <path d="M7 9l5-5 5 5" />
+            <path d="M7 15l5 5 5-5" />
+          </svg>
+          <span id="octave-toggle-label">C4</span>
+        </button>
       </div>
     </div>
 

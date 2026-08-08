@@ -18,12 +18,17 @@ const MASTER_GAIN = 0.85;
 const PIANO_OCTAVE_MIN = 3;
 const PIANO_OCTAVE_MAX = 6;
 const PIANO_DEFAULT_OCTAVE_START = 4;
+const OCTAVE_CYCLE = Object.freeze(
+  Array.from(
+    { length: PIANO_OCTAVE_MAX - PIANO_OCTAVE_MIN + 1 },
+    (_, i) => PIANO_OCTAVE_MIN + i,
+  ),
+);
 const DEFAULT_PERFORMANCE_SETTINGS = Object.freeze({
   pianoMode: false,
-  octaveSwitching: false,
   pianoOctaveStart: PIANO_DEFAULT_OCTAVE_START,
   rhythmSnap: true,
-  showGrid: false,
+  showGrid: true,
 });
 
 /* ---------- 全局状态 ---------- */
@@ -53,18 +58,40 @@ const SFX_SAMPLE_SETS = Object.freeze({
     jiao: 'dingdongji_ji',
   }),
 });
+// 顶部音效按钮：每种音效的显示名与循环顺序。
+const SFX_LABEL = Object.freeze({
+  dagou: 'da-gou-jiao',
+  dingdong: 'ding-dong-ji',
+  hajimi: 'ha-ji-mi',
+});
+const SFX_CYCLE_ORDER = Object.freeze(['dagou', 'dingdong', 'hajimi', 'mute']);
+// 顶部形象按钮：4 种形象（含帝皇）的小图、显示名与循环顺序。
+const CHARACTER_SET_ICON = Object.freeze({
+  dagou: 'Image/dagou_close_mouth.png',
+  dingdongji: 'Image/dingdongji_close_mouth.png',
+  maodie: 'Image/maodie_close_mouth.png',
+  emperor: 'Image/donghaidihuang_icon.webp',
+});
+const CHARACTER_SET_LABEL = Object.freeze({
+  dagou: '大狗',
+  dingdongji: '叮咚鸡',
+  maodie: '哈基米',
+  emperor: '帝皇',
+});
+const CHARACTER_SET_CYCLE = Object.freeze(['dagou', 'dingdongji', 'maodie', 'emperor']);
+// 形象与音效解耦：形象按角色 id 索引。帝皇（emperor）使用独立动画，无静态图集。
 const CHARACTER_IMAGE_SETS = Object.freeze({
   dagou: Object.freeze({
     close: 'Image/dagou_close_mouth.png',
     open: 'Image/dagou_open_mouth.png',
     alt: '大狗',
   }),
-  dingdong: Object.freeze({
+  dingdongji: Object.freeze({
     close: 'Image/dingdongji_close_mouth.png',
     open: 'Image/dingdongji_open_mouth.png',
     alt: '叮咚鸡',
   }),
-  hajimi: Object.freeze({
+  maodie: Object.freeze({
     close: 'Image/maodie_close_mouth.png',
     open: 'Image/maodie_open_mouth.png',
     alt: '哈基米',
@@ -87,7 +114,7 @@ const RUNTIME_SAMPLE_NAMES = Object.freeze(
 const buffers = {};       // 解码后的音效样本
 const sustainLoops = {};  // 从原样本中实时构建的 WSOLA 延音纹理
 let selectedSfxId = 'hajimi';
-let hajimiAnimationEnabled = false;
+let selectedCharacterId = 'maodie';
 let hajimiAnimationReady = false;
 let hajimiAnimationRequested = false;
 let hajimiAnimationFrame = -1;
@@ -162,10 +189,6 @@ let lastCommittedInputTime = -Infinity;
 const pointers = new Map();// pointerId -> { zone, voice, pendingEntryId, lastX, lastY }
 const CONTROLS_IDLE_MS = 2000;
 const CONTROLS_HOVER_IDLE_MS = 250;
-const CREATOR_MID = '357762853';
-const CREATOR_URL = `https://space.bilibili.com/${CREATOR_MID}`;
-const FEATURED_BVID = 'BV1kNKU6REBg';
-const FEATURED_VIDEO_URL = `https://www.bilibili.com/video/${FEATURED_BVID}/`;
 // 本地持久化键名（沿用历史命名）：替代 b站 Toy 云端存储，保存演奏设置。
 const TOY_CLOUD_KEYS = Object.freeze({
   sfxUnlocked: 'dagou_sfx_unlocked_v1',
@@ -180,7 +203,6 @@ const TOY_CLOUD_KEYS = Object.freeze({
 });
 const TOY_CLOUD_KEY_LIST = Object.freeze(Object.values(TOY_CLOUD_KEYS));
 const VIDEO_UNLOCK_ITEM_IDS = new Set(['dingdong', 'hajimi']);
-const LOCKED_SFX_IDS = new Set(['dingdong']);
 let controlsIdleTimer = 0;
 
 /* 本地设置存储：替代 b站 Toy SDK 的云端读写。所有键沿用 TOY_CLOUD_KEYS，
@@ -226,11 +248,6 @@ const localToyAdapter = Object.freeze({
   },
 });
 
-/* 站外跳转（视频 / 作者主页）：原 Toy navigate 已移除，统一用新标签打开 b站。 */
-function openExternalUrl(url) {
-  window.open(url, '_blank', 'noopener,noreferrer');
-}
-
 /* ---------- DOM ---------- */
 const stage     = document.getElementById('stage');
 const fxCanvas  = document.getElementById('fx');
@@ -245,64 +262,28 @@ const dogAnimation2d = dogAnimationCanvas.getContext('2d', { alpha: true });
 const overlay   = document.getElementById('overlay');
 const keyGrid   = document.getElementById('key-grid');
 const flashLayer = document.getElementById('zoneflash');
-const octaveControls = document.getElementById('octave-controls');
-const octaveDownButton = document.getElementById('octave-down');
-const octaveUpButton = document.getElementById('octave-up');
 const subEl     = overlay.querySelector('.sub');
 const fx2d      = fxCanvas.getContext('2d');
 const topControls = document.getElementById('top-controls');
+const topControlsButtons = [...topControls.querySelectorAll('button')];
 const musicToggle = document.getElementById('music-toggle');
-const sfxToggle = document.getElementById('sfx-toggle');
-const settingsButton = document.getElementById('settings-button');
-const updateDot = document.getElementById('update-dot');
-const settingsOverlay = document.getElementById('settings-overlay');
-const settingsPanel = document.getElementById('settings-panel');
-const settingsClose = document.getElementById('settings-close');
-const authorHomeButton = document.getElementById('author-home-button');
-const videoCard = document.getElementById('video-card');
-const videoPlay = videoCard.querySelector('.video-play');
-const sfxOptions = [...document.querySelectorAll('.sfx-option')];
-const hajimiOptionImage = document.getElementById('hajimi-option-image');
-const hajimiSkinSwitcher = document.getElementById('hajimi-skin-switcher');
-const hajimiSkinOptions = [
-  ...hajimiSkinSwitcher.querySelectorAll('.skin-option'),
-];
-const hajimiSkinClassic = hajimiSkinSwitcher.querySelector('[data-skin="classic"]');
-const hajimiSkinEmperor = hajimiSkinSwitcher.querySelector('[data-skin="emperor"]');
-const hajimiSkinEmperorHint = hajimiSkinEmperor.querySelector('.skin-hint');
+const sfxSetButton = document.getElementById('sfx-set-toggle');
+const octaveToggleButton = document.getElementById('octave-toggle');
+const characterSetButton = document.getElementById('character-set-toggle');
+const characterSetIcon = document.getElementById('character-set-icon');
+const sfxSetLabel = document.getElementById('sfx-set-label');
+const sfxSetMuteIcon = document.getElementById('sfx-set-mute-icon');
 const performanceSettingButtons = [
-  ...document.querySelectorAll('.setting-row[data-setting]'),
+  ...document.querySelectorAll('[data-setting]'),
 ];
-const octaveSwitchingSetting = document.getElementById('octave-switching-setting');
-const performanceSettingsStatus = document.getElementById(
-  'performance-settings-status'
-);
 const toyNotice = document.getElementById('toy-notice');
-const authorLink = document.getElementById('author-link');
 const reduceUiMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function showControls() {
-  if (pointers.size > 0 || holding) return;
-  topControls.classList.add('is-visible');
-}
-
-function hideControlsUntilIdle() {
-  topControls.classList.remove('is-visible');
-  topControls.classList.remove('is-revealing-fast');
-  clearTimeout(controlsIdleTimer);
-  controlsIdleTimer = setTimeout(showControls, CONTROLS_IDLE_MS);
-}
-
-function accelerateControlsReveal() {
-  if (
-    topControls.classList.contains('is-visible') ||
-    pointers.size > 0 ||
-    holding
-  ) return;
-  topControls.classList.add('is-revealing-fast');
-  clearTimeout(controlsIdleTimer);
-  controlsIdleTimer = setTimeout(showControls, CONTROLS_HOVER_IDLE_MS);
-}
+/* 顶部控件改为常驻显示，不再闲置隐藏。
+   这三个函数保留为空实现，避免改动散落各处的调用点。 */
+function showControls() {}
+function hideControlsUntilIdle() {}
+function accelerateControlsReveal() {}
 
 function setBusMuted(bus, muted) {
   if (!ctx || !bus) return;
@@ -325,18 +306,6 @@ function toggleMusic() {
   updateMuteButton(musicToggle, bgmMuted, '音乐');
 }
 
-function toggleSoundEffects() {
-  sfxMuted = !sfxMuted;
-  setBusMuted(sfxBus, sfxMuted);
-  updateMuteButton(sfxToggle, sfxMuted, '音效');
-
-  if (sfxMuted) {
-    dogInner.classList.remove('bark-image');
-  } else if (mouthVoice) {
-    dogInner.classList.add('bark-image');
-  }
-}
-
 function setRhythmScale(element, pulse, amount) {
   element.style.setProperty(
     '--rhythm-scale',
@@ -344,122 +313,26 @@ function setRhythmScale(element, pulse, amount) {
   );
 }
 
-/* 两行文字拆成等距字符；Created by 整体跟拍，
-   MarkCup 每拍只放大一个字母，并按 M → a → … → p 循环。 */
-const authorNameLetters = [];
-for (const line of authorLink.querySelectorAll('.author-label, .author-name')) {
-  const text = line.textContent;
-  line.textContent = '';
-  for (const char of text) {
-    const letter = document.createElement('span');
-    letter.className = 'author-letter';
-    letter.textContent = char === ' ' ? ' ' : char;   // 空格转为 nbsp，避免 inline-block 中塌陷
-    line.appendChild(letter);
-    if (line.classList.contains('author-name')) {
-      authorNameLetters.push(letter);
-    }
-  }
-}
-
-function updateAuthorNameLetters(beatIndex, pulse) {
-  const activeIndex = authorNameLetters.length
-    ? ((beatIndex % authorNameLetters.length) + authorNameLetters.length) %
-      authorNameLetters.length
-    : -1;
-
-  for (let i = 0; i < authorNameLetters.length; i++) {
-    const scale = i === activeIndex ? 1 + pulse * 0.24 : 1;
-    authorNameLetters[i].style.transform = `scale(${scale.toFixed(4)})`;
-  }
-}
-
 function updateUiRhythm(beatPosition) {
-  if (!Number.isFinite(beatPosition)) {
-    setRhythmScale(musicToggle, 0, 0.075);
-    setRhythmScale(sfxToggle, 0, 0.075);
-    setRhythmScale(settingsButton, 0, 0.075);
-    setRhythmScale(updateDot, 0, 0.4);
-    setRhythmScale(videoPlay, 0, 0.12);
-    authorLink.style.setProperty('--author-rhythm-scale', '1');
-    authorLink.style.setProperty('--author-lift', '0px');
-    updateAuthorNameLetters(-1, 0);
-    return;
+  const pulse = (!Number.isFinite(beatPosition) || reduceUiMotion)
+    ? 0
+    : Math.pow(1 - (((beatPosition % 1) + 1) % 1), 4.5);
+  // 所有顶部按钮都随节拍跳动；背景音乐静音时音乐按钮不跳。
+  for (const button of topControlsButtons) {
+    const suppress = button === musicToggle && bgmMuted;
+    setRhythmScale(button, suppress ? 0 : pulse, 0.075);
   }
-
-  const phase = ((beatPosition % 1) + 1) % 1;
-  const beatIndex = Math.floor(beatPosition);
-  const pulse = reduceUiMotion ? 0 : Math.pow(1 - phase, 4.5);
-  let musicPulse = 0;
-  let sfxPulse = 0;
-
-  if (!bgmMuted && !sfxMuted) {
-    if (((beatIndex % 2) + 2) % 2 === 0) musicPulse = pulse;
-    else sfxPulse = pulse;
-  } else if (!bgmMuted) {
-    musicPulse = pulse;
-  } else if (!sfxMuted) {
-    sfxPulse = pulse;
-  }
-
-  setRhythmScale(musicToggle, musicPulse, 0.075);
-  setRhythmScale(sfxToggle, sfxPulse, 0.075);
-  setRhythmScale(settingsButton, pulse, 0.075);
-  setRhythmScale(updateDot, pulse, 0.4);
-  setRhythmScale(videoPlay, pulse, 0.12);
-  authorLink.style.setProperty(
-    '--author-rhythm-scale',
-    (1 + pulse * 0.032).toFixed(4)
-  );
-  authorLink.style.setProperty(
-    '--author-lift',
-    `${(-pulse * 1.4).toFixed(3)}px`
-  );
-  updateAuthorNameLetters(beatIndex, pulse);
-}
-
-function openCreatorSpace() {
-  openExternalUrl(CREATOR_URL);
-}
-
-let videoUnlockPending = false;
-
-/* 视频卡片：原 Toy 站内解锁流程已移除，点击直接在新标签打开 b站 开发视频。 */
-function openFeaturedVideo() {
-  if (videoUnlockPending) return;
-  videoUnlockPending = true;
-  videoCard.setAttribute('aria-busy', 'true');
-  openExternalUrl(FEATURED_VIDEO_URL);
-  // 新标签打开后本页仍在，短暂保留 busy 态防止连点，随后恢复。
-  window.setTimeout(() => {
-    videoUnlockPending = false;
-    videoCard.removeAttribute('aria-busy');
-  }, 400);
 }
 
 for (const button of topControls.querySelectorAll('button')) {
-  button.addEventListener('pointerenter', (event) => {
-    if (event.pointerType === 'mouse') accelerateControlsReveal();
-  });
-  button.addEventListener('click', (event) => {
-    const pinnedSettingsButton =
-      button === settingsButton &&
-      topControls.classList.contains('has-update-dot');
-    if (!topControls.classList.contains('is-visible') && !pinnedSettingsButton) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      accelerateControlsReveal();
-    }
-  }, { capture: true });
   button.addEventListener('pointerdown', (event) => event.stopPropagation());
   button.addEventListener('pointermove', (event) => event.stopPropagation());
   button.addEventListener('pointerup', (event) => event.stopPropagation());
   button.addEventListener('click', (event) => event.stopPropagation());
 }
 musicToggle.addEventListener('click', toggleMusic);
-sfxToggle.addEventListener('click', toggleSoundEffects);
 
-/* ---------- 设置菜单与 Toy 云状态 ---------- */
-let settingsOpen = false;
+/* ---------- 设置面板与 Toy 云状态 ---------- */
 let toyNoticeTimer = 0;
 const toyCloudState = {
   toy: null,
@@ -480,9 +353,6 @@ const toyCloudState = {
 };
 const PERFORMANCE_SETTING_KEYS = Object.freeze({
   pianoMode: TOY_CLOUD_KEYS.pianoMode,
-  octaveSwitching: TOY_CLOUD_KEYS.octaveSwitching,
-  rhythmSnap: TOY_CLOUD_KEYS.rhythmSnap,
-  showGrid: TOY_CLOUD_KEYS.showGrid,
 });
 
 function showToyNotice(message, isError = false) {
@@ -519,61 +389,15 @@ function normalizePianoOctaveStart(value) {
 }
 
 function effectivePianoOctaveStart(settings = performanceSettings) {
-  return settings.pianoMode && settings.octaveSwitching
+  return settings.pianoMode
     ? normalizePianoOctaveStart(settings.pianoOctaveStart)
     : PIANO_DEFAULT_OCTAVE_START;
 }
 
 function octaveControlsEnabled(settings = performanceSettings) {
-  return settings.pianoMode && settings.octaveSwitching;
+  return settings.pianoMode;
 }
 
-function renderOctaveControlButton(button, currentOctave, targetOctave, direction) {
-  const available = targetOctave >= PIANO_OCTAVE_MIN && targetOctave <= PIANO_OCTAVE_MAX;
-  const currentLabel = `C${currentOctave}`;
-  const targetLabel = available
-    ? `C${targetOctave}`
-    : (direction < 0 ? 'MIN' : 'MAX');
-  const isLandscape = octaveControls.classList.contains('is-landscape');
-  const directionLabel = direction < 0 ? '低八度' : '高八度';
-
-  button.querySelector('.octave-current').textContent = currentLabel;
-  button.querySelector('.octave-target').textContent = targetLabel;
-  button.querySelector('.octave-arrow').textContent = isLandscape
-    ? (direction < 0 ? '←' : '→')
-    : (direction < 0 ? '↓' : '↑');
-  button.disabled = !available;
-  button.setAttribute(
-    'aria-label',
-    available
-      ? `当前起始音 ${currentLabel}，切换到${directionLabel} ${targetLabel}`
-      : `当前起始音 ${currentLabel}，已是${direction < 0 ? '最低' : '最高'}八度`,
-  );
-}
-
-function renderOctaveControls() {
-  const visible = octaveControlsEnabled();
-  const { width, height } = getStageMetrics();
-  const landscape = width >= height;
-  const currentOctave = effectivePianoOctaveStart();
-
-  octaveControls.classList.toggle('is-visible', visible);
-  octaveControls.classList.toggle('is-landscape', landscape);
-  octaveControls.setAttribute('aria-hidden', String(!visible));
-  octaveControls.inert = !visible;
-  renderOctaveControlButton(
-    octaveDownButton,
-    currentOctave,
-    currentOctave - 1,
-    -1,
-  );
-  renderOctaveControlButton(
-    octaveUpButton,
-    currentOctave,
-    currentOctave + 1,
-    1,
-  );
-}
 
 function renderKeyGrid() {
   keyGrid.style.setProperty('--key-grid-cols', String(cols));
@@ -616,7 +440,6 @@ function applyPerformanceSettings(previousSettings) {
   } else {
     renderKeyGrid();
   }
-  renderOctaveControls();
 }
 
 function replacePerformanceSettings(nextSettings) {
@@ -653,51 +476,23 @@ function readCloudPerformanceSettings(cloud) {
   settings.pianoOctaveStart = validCloudOctaveStart
     ? cloudOctaveStart
     : PIANO_DEFAULT_OCTAVE_START;
-  if (!validCloudOctaveStart) settings.octaveSwitching = false;
   return settings;
 }
 
 function renderPerformanceSettings() {
-  octaveSwitchingSetting.hidden = !performanceSettings.pianoMode;
-
   for (const button of performanceSettingButtons) {
     const settingName = button.dataset.setting;
-    button.setAttribute(
-      'aria-checked',
-      String(performanceSettings[settingName] === true)
-    );
+    const isActive = performanceSettings[settingName] === true;
+    button.setAttribute('aria-checked', String(isActive));
+    button.classList.toggle('is-active', isActive);
     button.disabled = !toyCloudState.initialized || performanceSettingsSaving;
   }
-
-  performanceSettingsStatus.classList.remove('is-error');
-  if (performanceSettingsSaving) {
-    performanceSettingsStatus.textContent = '正在保存设置…';
-  } else if (!toyCloudState.initialized) {
-    performanceSettingsStatus.textContent = '正在读取本地设置…';
-  } else {
-    performanceSettingsStatus.textContent = '设置已保存到本地';
-  }
-  renderOctaveControls();
+  updateOctaveButton();
 }
 
 function renderToyCloudState() {
-  const showUpdateDot = !toyCloudState.settingsSeen;
-  updateDot.classList.toggle('is-hidden', !showUpdateDot);
-  topControls.classList.toggle('has-update-dot', showUpdateDot);
-
-  for (const option of sfxOptions) {
-    const sfxId = option.dataset.sfx;
-    const isCloudLockedOption = LOCKED_SFX_IDS.has(sfxId);
-    const locked = isCloudLockedOption && !toyCloudState.sfxUnlocked;
-    option.classList.toggle('is-locked', locked);
-
-    if (VIDEO_UNLOCK_ITEM_IDS.has(sfxId)) {
-      const label = sfxId === 'dingdong' ? '叮咚鸡' : '哈基米';
-      option.setAttribute('aria-label', locked ? `${label}，未解锁` : label);
-      option.classList.toggle('is-new-hidden', toyCloudState.newSeen[sfxId]);
-    }
-  }
-  renderHajimiCharacterControl();
+  updateSfxSetButton();
+  updateCharacterSetButton();
   renderPerformanceSettings();
 }
 
@@ -768,13 +563,6 @@ function persistSeenState(items) {
   });
 }
 
-function markSettingsSeen() {
-  if (toyCloudState.settingsSeen) return;
-  toyCloudState.settingsSeen = true;
-  toyCloudState.locallyChanged.settingsSeen = true;
-  renderToyCloudState();
-  persistSeenState({ [TOY_CLOUD_KEYS.settingsSeen]: '1' });
-}
 
 function markSfxNewSeen(sfxId) {
   if (!VIDEO_UNLOCK_ITEM_IDS.has(sfxId) || toyCloudState.newSeen[sfxId]) return;
@@ -804,42 +592,6 @@ function markAllSfxNewSeen() {
   persistSeenState(items);
 }
 
-
-/* 哈基米音效卡本身永不显示锁：皮肤切换收敛到独立的形象切换行，
-   帝皇的锁与 NEW 只挂在帝皇选项上，避免“哈基米被锁”的歧义。 */
-function renderHajimiCharacterControl() {
-  const option = sfxOptions.find((item) => item.dataset.sfx === 'hajimi');
-  if (!option) return;
-
-  const isSelected = selectedSfxId === 'hajimi';
-  const emperorLocked = !toyCloudState.sfxUnlocked;
-
-  hajimiSkinSwitcher.classList.toggle('is-open', isSelected);
-  hajimiSkinSwitcher.setAttribute('aria-hidden', String(!isSelected));
-  for (const button of hajimiSkinOptions) {
-    button.disabled = !isSelected;
-  }
-
-  hajimiSkinClassic.classList.toggle('is-active', !hajimiAnimationEnabled);
-  hajimiSkinClassic.setAttribute('aria-checked', String(!hajimiAnimationEnabled));
-  hajimiSkinEmperor.classList.toggle('is-active', hajimiAnimationEnabled);
-  hajimiSkinEmperor.setAttribute('aria-checked', String(hajimiAnimationEnabled));
-  hajimiSkinEmperor.classList.toggle('is-locked', emperorLocked);
-  hajimiSkinEmperor.classList.toggle('is-new-hidden', toyCloudState.newSeen.hajimi);
-  hajimiSkinEmperorHint.textContent = emperorLocked ? '观看开发视频后解锁' : '已解锁';
-  hajimiSkinEmperor.setAttribute(
-    'aria-label',
-    emperorLocked ? '哈基米帝皇形象，观看开发视频后解锁' : '哈基米帝皇形象'
-  );
-
-  hajimiOptionImage.src = isSelected && hajimiAnimationEnabled
-    ? HAJIMI_ANIMATION_ICON_URL
-    : HAJIMI_STATIC_ICON_URL;
-
-  const label = isSelected ? '哈基米音效已启用' : '哈基米';
-  option.setAttribute('aria-label', label);
-  option.title = label;
-}
 
 function getAudioBeatPosition() {
   return started && ctx && startTime > 0 && ctx.currentTime >= startTime
@@ -893,18 +645,26 @@ function renderHajimiAnimationFrame(beatPosition) {
   );
 }
 
-function applyHajimiAnimationVisibility() {
-  const showAnimation =
-    selectedSfxId === 'hajimi' &&
-    hajimiAnimationEnabled &&
-    hajimiAnimationReady;
-  dogInner.classList.toggle('is-hajimi-animation', showAnimation);
+function applyCharacterVisibility() {
+  const isEmperor = selectedCharacterId === 'emperor';
+  const showAnimation = isEmperor && hajimiAnimationReady;
+  dogInner.classList.toggle('is-emperor-animation', showAnimation);
   dogAnimationCanvas.setAttribute('aria-hidden', String(!showAnimation));
+
+  // 哈基米（maodie）两张图轮廓不同，需互斥可见；其余形象用通用透明度切换。
+  dogInner.classList.toggle('is-hajimi', selectedCharacterId === 'maodie');
+
+  if (isEmperor) {
+    dogCloseImage.alt = '';
+  } else {
+    const set = CHARACTER_IMAGE_SETS[selectedCharacterId]
+      ?? CHARACTER_IMAGE_SETS.dagou;
+    dogCloseImage.src = set.close;
+    dogCloseImage.alt = set.alt;
+    dogOpenImage.src = set.open;
+  }
+
   if (showAnimation) renderHajimiAnimationFrame(getAudioBeatPosition());
-  const characterImages = CHARACTER_IMAGE_SETS[selectedSfxId]
-    ?? CHARACTER_IMAGE_SETS.dagou;
-  dogCloseImage.alt = showAnimation ? '' : characterImages.alt;
-  renderHajimiCharacterControl();
 }
 
 function ensureHajimiAnimationLoaded() {
@@ -913,49 +673,67 @@ function ensureHajimiAnimationLoaded() {
   dogAnimationAtlas.src = HAJIMI_ATLAS_URL;
 }
 
-function setHajimiSkin(useEmperor) {
-  if (selectedSfxId !== 'hajimi') return;
-  if (useEmperor === hajimiAnimationEnabled) return;
-  hajimiAnimationEnabled = useEmperor;
-  if (useEmperor) {
+function updateSfxSetButton() {
+  if (!sfxSetButton) return;
+  const muted = sfxMuted;
+  if (sfxSetMuteIcon) sfxSetMuteIcon.style.display = muted ? '' : 'none';
+  const label = muted ? '关闭音效' : (SFX_LABEL[selectedSfxId] ?? 'ha-ji-mi');
+  if (sfxSetLabel) sfxSetLabel.textContent = label;
+  sfxSetButton.classList.toggle('is-muted', muted);
+  sfxSetButton.setAttribute('aria-label', muted ? '开启音效' : `切换音效，当前${label}`);
+}
+
+function currentSfxKey() {
+  return sfxMuted ? 'mute' : selectedSfxId;
+}
+
+function applySfxKey(key) {
+  if (key === 'mute') {
+    if (!sfxMuted) {
+      sfxMuted = true;
+      setBusMuted(sfxBus, true);
+      dogInner.classList.remove('bark-image');
+    }
+  } else {
+    selectedSfxId = SFX_SAMPLE_SETS[key] ? key : 'hajimi';
+    if (sfxMuted) {
+      sfxMuted = false;
+      setBusMuted(sfxBus, false);
+      if (mouthVoice) dogInner.classList.add('bark-image');
+    }
+  }
+  updateSfxSetButton();
+}
+
+// 顶部音效按钮：点击在 da-gou-jiao → ding-dong-ji → ha-ji-mi → 关闭音效 之间循环。
+function cycleSfx() {
+  const order = SFX_CYCLE_ORDER;
+  const idx = order.indexOf(currentSfxKey());
+  const next = order[(idx + 1) % order.length];
+  applySfxKey(next);
+  if (next !== 'mute') markSfxNewSeen(next);
+}
+
+// 顶部形象按钮：点击在 4 种形象（含帝皇）间循环切换，只改画面角色、不改音效。
+function cycleCharacterSet() {
+  const idx = CHARACTER_SET_CYCLE.indexOf(selectedCharacterId);
+  const next = CHARACTER_SET_CYCLE[(idx + 1) % CHARACTER_SET_CYCLE.length];
+  selectedCharacterId = next;
+  if (next === 'emperor') {
     alignHajimiAnimationToBeat();
     ensureHajimiAnimationLoaded();
     if (!hajimiAnimationReady) showToyNotice('正在加载东海帝皇动画…');
   }
-  applyHajimiAnimationVisibility();
+  applyCharacterVisibility();
+  updateCharacterSetButton();
 }
 
-function selectSfxOption(option) {
-  selectedSfxId = SFX_SAMPLE_SETS[option.dataset.sfx]
-    ? option.dataset.sfx
-    : 'hajimi';
-  hajimiAnimationEnabled = false;
-  const characterImages = CHARACTER_IMAGE_SETS[selectedSfxId]
-    ?? CHARACTER_IMAGE_SETS.dagou;
-  dogCloseImage.src = characterImages.close;
-  dogCloseImage.alt = characterImages.alt;
-  dogOpenImage.src = characterImages.open;
-  dogInner.classList.toggle('is-hajimi', selectedSfxId === 'hajimi');
-  for (const other of sfxOptions) {
-    const selected = other === option;
-    other.classList.toggle('is-active', selected);
-    other.setAttribute('aria-checked', String(selected));
-  }
-  applyHajimiAnimationVisibility();
-}
-
-// 方案 A：所有音色直接解锁，点击即用。
-function handleSfxOptionClick(option) {
-  markSfxNewSeen(option.dataset.sfx);
-  selectSfxOption(option);
-}
-
-/* 形象切换行只在选中哈基米时可见可点：原皮随意换回；
-   帝皇未解锁时点击只引导去看开发视频，绝不影响哈基米音效本身。 */
-// 方案 A：帝皇形象直接解锁，点击即用。
-function handleSkinOptionClick(button) {
-  if (selectedSfxId !== 'hajimi') return;
-  setHajimiSkin(button.dataset.skin === 'emperor');
+function updateCharacterSetButton() {
+  if (!characterSetButton) return;
+  const icon = CHARACTER_SET_ICON[selectedCharacterId] ?? CHARACTER_SET_ICON.maodie;
+  const label = CHARACTER_SET_LABEL[selectedCharacterId] ?? '哈基米';
+  if (characterSetIcon) characterSetIcon.src = icon;
+  characterSetButton.setAttribute('aria-label', `切换形象，当前${label}`);
 }
 
 function resolveSfxSample(sample, sfxId = selectedSfxId) {
@@ -965,21 +743,25 @@ function resolveSfxSample(sample, sfxId = selectedSfxId) {
 renderToyCloudState();
 const toyStateReady = initializeToyCloudState();
 
+// 初始同步形象显示（默认 maodie 形象）。
+applyCharacterVisibility();
+
 dogAnimationAtlas.addEventListener('load', () => {
   hajimiAnimationReady = true;
-  if (hajimiAnimationEnabled) alignHajimiAnimationToBeat();
-  applyHajimiAnimationVisibility();
+  if (selectedCharacterId === 'emperor') alignHajimiAnimationToBeat();
+  applyCharacterVisibility();
 });
 dogAnimationAtlas.addEventListener('error', () => {
-  const wasWaitingForAnimation = hajimiAnimationEnabled;
-  hajimiAnimationEnabled = false;
+  const wasWaitingForAnimation = selectedCharacterId === 'emperor';
   hajimiAnimationReady = false;
   hajimiAnimationRequested = false;
   dogAnimationAtlas.removeAttribute('src');
-  applyHajimiAnimationVisibility();
+  // 帝皇动画加载失败时回退到哈基米原皮形象，避免画面空白。
   if (wasWaitingForAnimation) {
-    showToyNotice('东海帝皇动画加载失败，请稍后重试。', true);
+    selectedCharacterId = 'maodie';
+    showToyNotice('东海帝皇动画加载失败，已切换为哈基米形象。', true);
   }
+  applyCharacterVisibility();
 });
 
 async function handlePerformanceSettingClick(button) {
@@ -1073,7 +855,7 @@ function shiftPianoOctave(direction) {
   );
   const targetOctave = currentOctave + direction;
   if (targetOctave < PIANO_OCTAVE_MIN || targetOctave > PIANO_OCTAVE_MAX) {
-    renderOctaveControls();
+    updateOctaveButton();
     return true;
   }
 
@@ -1085,71 +867,34 @@ function shiftPianoOctave(direction) {
   return true;
 }
 
-for (const [button, direction] of [
-  [octaveDownButton, -1],
-  [octaveUpButton, 1],
-]) {
-  button.addEventListener('pointerdown', event => event.stopPropagation());
-  button.addEventListener('click', event => {
-    event.stopPropagation();
-    shiftPianoOctave(direction);
-  });
+// 顶部八度按钮：点击在 C3–C6 之间循环切换起始八度。
+function cyclePianoOctave() {
+  if (!performanceSettings.pianoMode) return;
+  const current = normalizePianoOctaveStart(performanceSettings.pianoOctaveStart);
+  const idx = OCTAVE_CYCLE.indexOf(current);
+  const next = OCTAVE_CYCLE[(idx + 1) % OCTAVE_CYCLE.length];
+  const previousSettings = { ...performanceSettings };
+  performanceSettings.pianoOctaveStart = next;
+  applyPerformanceSettings(previousSettings);
+  renderToyCloudState();
+  queuePianoOctaveCloudWrite(next);
 }
 
-function openSettings() {
-  if (settingsOpen) return;
-  markSettingsSeen();
-  settingsOpen = true;
-  settingsOverlay.inert = false;
-  settingsOverlay.classList.add('is-open');
-  settingsOverlay.setAttribute('aria-hidden', 'false');
-  settingsClose.focus({ preventScroll: true });
+function updateOctaveButton() {
+  if (!octaveToggleButton) return;
+  // 始终显示当前选中的起始八度（pianoOctaveStart），钢琴按钮只控制启用/禁用，
+  // 不因钢琴模式开关而在 C4(默认) 与记忆值之间跳变。
+  const octave = normalizePianoOctaveStart(performanceSettings.pianoOctaveStart);
+  const label = octaveToggleButton.querySelector('#octave-toggle-label');
+  if (label) label.textContent = `C${octave}`;
+  octaveToggleButton.disabled = !performanceSettings.pianoMode;
+  octaveToggleButton.setAttribute('aria-label', `切换八度，当前 C${octave}`);
 }
-
-function closeSettings() {
-  if (!settingsOpen) return;
-  markAllSfxNewSeen();
-  settingsOpen = false;
-  settingsOverlay.inert = true;
-  settingsOverlay.classList.remove('is-open');
-  settingsOverlay.setAttribute('aria-hidden', 'true');
-  settingsButton.focus({ preventScroll: true });
-}
-
-function handleAuthorHomeClick() {
-  if (!settingsOpen) return;
-  openCreatorSpace();
-}
-
-settingsButton.addEventListener('click', openSettings);
-settingsClose.addEventListener('click', closeSettings);
-/* 点击面板外的半透明背景关闭；面板上的事件全部拦截，不穿透到游戏区 */
-settingsOverlay.addEventListener('pointerdown', (event) => {
-  if (event.target === settingsOverlay) closeSettings();
-});
-for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
-  settingsOverlay.addEventListener(eventName, (event) => event.stopPropagation());
-}
-settingsPanel.addEventListener('click', (event) => event.stopPropagation());
-window.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape') return;
-  closeSettings();
-});
-
-authorHomeButton.addEventListener('click', handleAuthorHomeClick);
-videoCard.addEventListener('click', openFeaturedVideo);
 
 /* 三套音效都保留 da / gou / jiao 的语义位置，只替换实际播放采样。 */
-for (const option of sfxOptions) {
-  option.addEventListener('click', () => {
-    void handleSfxOptionClick(option);
-  });
-}
-for (const button of hajimiSkinOptions) {
-  button.addEventListener('click', () => {
-    void handleSkinOptionClick(button);
-  });
-}
+sfxSetButton.addEventListener('click', cycleSfx);
+characterSetButton.addEventListener('click', cycleCharacterSet);
+octaveToggleButton.addEventListener('click', cyclePianoOctave);
 
 /* ---------- 和弦走向：C - G - Am - F（简单洗脑） ---------- */
 const CHORDS = [
@@ -2081,7 +1826,6 @@ function buildGrid() {
   }
 
   if (typeof renderKeyGrid === 'function') renderKeyGrid();
-  if (typeof renderOctaveControls === 'function') renderOctaveControls();
 }
 
 function zoneIndex(x, y) {
@@ -2956,7 +2700,7 @@ function tick() {
   lastTick = now;
   const uiBeatPosition = getAudioBeatPosition();
   updateUiRhythm(uiBeatPosition);
-  if (hajimiAnimationEnabled && hajimiAnimationReady) {
+  if (selectedCharacterId === 'emperor' && hajimiAnimationReady) {
     renderHajimiAnimationFrame(uiBeatPosition);
   }
 
@@ -3138,8 +2882,7 @@ function handlePianoKeyDown(event) {
     event.repeat ||
     event.ctrlKey ||
     event.altKey ||
-    event.metaKey ||
-    settingsOpen
+    event.metaKey
   ) return;
 
   if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
@@ -3222,6 +2965,6 @@ if (window.ResizeObserver) {
 buildGrid();
 fxResize();
 updateMuteButton(musicToggle, bgmMuted, '音乐');
-updateMuteButton(sfxToggle, sfxMuted, '音效');
+updateSfxSetButton();
 showControls();
 requestAnimationFrame(tick);
