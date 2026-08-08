@@ -182,6 +182,7 @@ let selectedSfxId = 'hajimi';
 let selectedCharacterId = 'maodie';
 let hajimiAnimationReady = false;
 let hajimiAnimationRequested = false;
+let hajimiAnimationAtlasUrl = '';
 let hajimiAnimationFrame = -1;
 let hajimiAnimationEpochBeat = 0;
 
@@ -725,14 +726,16 @@ function renderHajimiAnimationFrame(beatPosition) {
 function applyCharacterVisibility() {
   const isAnimation = isAnimationCharacter(selectedCharacterId);
   const showAnimation = isAnimation && hajimiAnimationReady;
-  dogInner.classList.toggle('is-emperor-animation', showAnimation);
+  // 动画形象一选中就进入动画显示模式，立即隐藏底层静态图；
+  // 否则 atlas 加载期间会短暂露出默认 maodie_close_mouth.png。
+  dogInner.classList.toggle('is-emperor-animation', isAnimation);
   dogAnimationCanvas.setAttribute('aria-hidden', String(!showAnimation));
 
   // 哈基米（maodie）与自定义形象（builtin:false）两张图轮廓/透明区域不一致，需互斥可见，
   // 避免透明背景叠加时下层闭嘴图透出造成重影；其余内置形象用通用透明度切换。
   const isExclusiveMouth = selectedCharacterId === 'maodie'
     || CHARACTER_IMAGE_SETS[selectedCharacterId]?.builtin === false;
-  dogInner.classList.toggle('is-hajimi', isExclusiveMouth);
+  dogInner.classList.toggle('is-hajimi', !isAnimation && isExclusiveMouth);
 
   if (isAnimation) {
     dogCloseImage.alt = '';
@@ -751,9 +754,14 @@ function applyCharacterVisibility() {
 }
 
 function ensureHajimiAnimationLoaded() {
-  if (hajimiAnimationReady || hajimiAnimationRequested) return;
+  const atlasUrl = currentAnimationAtlasUrl();
+  if (hajimiAnimationReady && hajimiAnimationAtlasUrl === atlasUrl) return;
+  if (hajimiAnimationRequested && hajimiAnimationAtlasUrl === atlasUrl) return;
+  hajimiAnimationReady = false;
   hajimiAnimationRequested = true;
-  dogAnimationAtlas.src = currentAnimationAtlasUrl();
+  hajimiAnimationAtlasUrl = atlasUrl;
+  hajimiAnimationFrame = -1;
+  dogAnimationAtlas.src = atlasUrl;
 }
 
 function updateSfxSetButton() {
@@ -1096,12 +1104,17 @@ initCharacters();
 async function initCharacters() {
   await loadCharactersFromServer();
   restoreSelectedCharacter();
+  if (isAnimationCharacter(selectedCharacterId)) {
+    alignHajimiAnimationToBeat();
+    ensureHajimiAnimationLoaded();
+  }
   applyCharacterVisibility();
   updateCharacterSetButton();
 }
 
 dogAnimationAtlas.addEventListener('load', () => {
   hajimiAnimationReady = true;
+  hajimiAnimationRequested = false;
   if (isAnimationCharacter(selectedCharacterId)) alignHajimiAnimationToBeat();
   applyCharacterVisibility();
 });
@@ -1109,6 +1122,7 @@ dogAnimationAtlas.addEventListener('error', () => {
   const wasWaitingForAnimation = isAnimationCharacter(selectedCharacterId);
   hajimiAnimationReady = false;
   hajimiAnimationRequested = false;
+  hajimiAnimationAtlasUrl = '';
   dogAnimationAtlas.removeAttribute('src');
   // 动画形象加载失败时回退到哈基米原皮形象，避免画面空白。
   if (wasWaitingForAnimation) {
