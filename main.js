@@ -327,7 +327,8 @@ const characterAddButton = document.getElementById('character-add-toggle');
 const ccmModal = document.getElementById('custom-character-modal');
 const ccmSlotClose = document.getElementById('ccm-slot-close');
 const ccmSlotOpen = document.getElementById('ccm-slot-open');
-const ccmFileInput = document.getElementById('ccm-file');
+const ccmFileInputClose = document.getElementById('ccm-file-close');
+const ccmFileInputOpen = document.getElementById('ccm-file-open');
 const ccmPreview = document.getElementById('ccm-preview');
 const ccmNameInput = document.getElementById('ccm-name');
 const ccmConfirm = document.getElementById('ccm-confirm');
@@ -844,6 +845,28 @@ function compressCharacterImage(file, targetWidth, targetHeight) {
   });
 }
 
+// 把已有的 dataURL 图片重绘到指定尺寸，输出新 dataURL；保存时用它把张嘴帧对齐到闭嘴帧。
+function resizeDataUrl(dataUrl, width, height) {
+  return new Promise((resolve, reject) => {
+    const probe = new Image();
+    probe.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const c2d = canvas.getContext('2d');
+      c2d.clearRect(0, 0, width, height);
+      c2d.drawImage(probe, 0, 0, width, height);
+      try {
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    probe.onerror = () => reject(new Error('图片缩放失败'));
+    probe.src = dataUrl;
+  });
+}
+
 // 弹层编辑态：slot 标记当前正在选哪一帧；closeImg/openImg 为压缩后的两帧。
 const customEditorState = { slot: null, closeImg: null, openImg: null };
 
@@ -879,32 +902,18 @@ function refreshCustomEditorPreview() {
   }
   ccmConfirm.disabled = !ready;
   ccmConfirm.classList.toggle('is-ready', ready);
-  // 闭嘴图选好后，张嘴槽位的占位文案切回可上传提示。
-  ccmSlotOpen.querySelector('.ccm-slot-ph').textContent = closeImg ? '点此选择图片' : '先选闭嘴图';
 }
 
-function pickCustomSlot(slot) {
-  // 张嘴帧必须以闭嘴帧尺寸为基准对齐，故强制先选闭嘴图。
-  if (slot === 'open' && !customEditorState.closeImg) {
-    showToyNotice('请先选择「闭嘴」图作为基准。', true);
-    return;
-  }
-  customEditorState.slot = slot;
-  ccmFileInput.value = '';
-  ccmFileInput.click();
-}
-
-async function onCustomFileChange() {
-  const file = ccmFileInput.files && ccmFileInput.files[0];
-  const slot = customEditorState.slot;
-  if (!file || !slot) return;
-  const base = customEditorState.closeImg;
+// 槽位用 <label for="ccm-file-xxx"> 原生触发各自隐藏的 file input，
+// 无需 JS click()，连续选择闭嘴/张嘴两帧稳定可靠。
+async function onCustomFileChange(event) {
+  const input = event.currentTarget;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const slot = input === ccmFileInputClose ? 'close' : 'open';
   try {
-    const result = await compressCharacterImage(
-      file,
-      slot === 'close' ? null : base.width,
-      slot === 'close' ? null : base.height,
-    );
+    // 每帧各自按最大宽度独立压缩；保存时再把张嘴帧对齐到闭嘴帧尺寸。
+    const result = await compressCharacterImage(file, null, null);
     customEditorState[`${slot}Img`] = result;
     refreshCustomEditorSlots();
   } catch (err) {
@@ -961,11 +970,22 @@ async function confirmCustomCharacter() {
   const { closeImg, openImg } = customEditorState;
   if (!closeImg || !openImg || ccmConfirm.disabled) return;
   const label = ((ccmNameInput.value || '').trim() || '自定义').slice(0, 6);
+  // 张嘴帧强制对齐到闭嘴帧尺寸，保证两帧切换不跳动。
+  let openDataUrl = openImg.dataUrl;
+  if (openImg.width !== closeImg.width || openImg.height !== closeImg.height) {
+    try {
+      openDataUrl = await resizeDataUrl(openImg.dataUrl, closeImg.width, closeImg.height);
+    } catch (err) {
+      console.warn('[大狗Tap] 自定义形象张嘴帧对齐失败。', err);
+      showToyNotice('张嘴图处理失败，换一张试试。', true);
+      return;
+    }
+  }
   const entry = {
     id: `custom-${Date.now()}`,
     label,
     close: closeImg.dataUrl,
-    open: openImg.dataUrl,
+    open: openDataUrl,
   };
   const list = loadCustomCharacters();
   list.push(entry);
@@ -1162,14 +1182,19 @@ function updateOctaveButton() {
 sfxSetButton.addEventListener('click', cycleSfx);
 characterSetButton.addEventListener('click', cycleCharacterSet);
 characterAddButton.addEventListener('click', openCustomCharacterModal);
-ccmSlotClose.addEventListener('click', () => pickCustomSlot('close'));
-ccmSlotOpen.addEventListener('click', () => pickCustomSlot('open'));
-ccmFileInput.addEventListener('change', onCustomFileChange);
+ccmFileInputClose.addEventListener('change', onCustomFileChange);
+ccmFileInputOpen.addEventListener('change', onCustomFileChange);
+// 打开文件框前清空 value，使"重复选同一文件 / 替换已选图"也能触发 change。
+ccmFileInputClose.addEventListener('click', (e) => { e.target.value = ''; });
+ccmFileInputOpen.addEventListener('click', (e) => { e.target.value = ''; });
 ccmPreview.addEventListener('click', () => {
   if (ccmPreview.classList.contains('has-img')) ccmPreview.classList.toggle('is-open');
 });
 ccmConfirm.addEventListener('click', confirmCustomCharacter);
 ccmCancel.addEventListener('click', closeCustomCharacterModal);
+// 弹层在 #stage 内，必须阻断 pointerdown 冒泡，否则会被舞台的 pointerdown
+// 处理（preventDefault + setPointerCapture）抢走指针，导致槽位/按钮点不动并误播音效。
+ccmModal.addEventListener('pointerdown', (event) => event.stopPropagation());
 ccmModal.addEventListener('click', (event) => {
   if (event.target === ccmModal) closeCustomCharacterModal();
 });
