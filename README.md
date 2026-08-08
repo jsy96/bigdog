@@ -89,11 +89,14 @@ Image/{id}_close.png + Image/{id}_open.png
 Image/{id}_close_mouth.png + Image/{id}_open_mouth.png
 ```
 
-精灵图动画形象：
+精灵图动画形象（WebP）：
 
 ```text
-Image/{id}_atlas.webp + Image/{id}_icon.webp
+Image/{id}_atlas.webp
+Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使用 atlas 本身
 ```
+
+`{id}_atlas.webp` 需要是 12×9 排列的 108 帧透明 WebP 精灵图；当前前端按每帧 `360×514` 读取，因此 atlas 总尺寸应为 `4320×4626`。
 
 后端启动后会按上述规则扫描。只要把配对图片放进 `Image/`，刷新页面后「形象」按钮就能循环到该形象；当前已有 `1_1_close.png` / `1_1_open.png` 与 `2_2_close.png` / `2_2_open.png` 会自动显示为形象。
 

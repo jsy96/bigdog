@@ -151,7 +151,7 @@ async function scanCharacters() {
     }
   }
 
-  // 2) 帝皇精灵图动画（atlas 必须存在）
+  // 2) 内置帝皇精灵图动画（atlas 必须存在，固定排在内置静态形象之后）
   const emp = animations[EMPEROR_PREFIX];
   if (emp && emp.atlas) {
     result.push({
@@ -165,7 +165,25 @@ async function scanCharacters() {
     seen.add(EMPEROR_PREFIX);
   }
 
-  // 3) 其余静态形象（用户上传的自定义 + 历史遗留），按 id 排序追加
+  // 3) 其余动画形象：Image/{id}_atlas.webp + 可选 Image/{id}_icon.webp。
+  // 只要把符合命名的 webp 放进 Image 目录，刷新后就会自动出现在「形象」循环里。
+  const restAnimations = Object.keys(animations)
+    .filter((p) => !seen.has(p) && animations[p].atlas)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const prefix of restAnimations) {
+    const a = animations[prefix];
+    result.push({
+      id: prefix,
+      label: labelById.get(prefix) || BUILTIN_LABELS[prefix] || prefix,
+      type: 'animation',
+      icon: a.icon || a.atlas,
+      atlas: a.atlas,
+      builtin: false,
+    });
+    seen.add(prefix);
+  }
+
+  // 4) 其余静态形象（用户上传的自定义 + 历史遗留），按 id 排序追加
   const rest = Object.keys(pairs)
     .filter((p) => !seen.has(p) && pairs[p].close && pairs[p].open)
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -256,18 +274,25 @@ async function deleteCustomCharacter(id) {
     return;
   }
 
-  // 兼容直接手动放进 Image/ 的配对图片（如 1_1_close.png / 1_1_open.png）：
+  // 兼容直接手动放进 Image/ 的配对静态图片（如 1_1_close.png / 1_1_open.png），
+  // 以及自定义动画图片（如 mychar_atlas.webp / mychar_icon.webp）：
   // 只要不是内置形象，也允许从面板里删除。
   const files = await fsp.readdir(IMAGE_DIR);
-  const matched = [];
+  const matchedStatic = [];
+  const matchedAnimation = [];
   for (const file of files) {
-    const m = PAIR_RE.exec(file);
-    if (m && m[1] === id) matched.push(file);
+    const pair = PAIR_RE.exec(file);
+    if (pair && pair[1] === id) matchedStatic.push(file);
+    const atlas = ATLAS_RE.exec(file);
+    if (atlas && atlas[1] === id) matchedAnimation.push(file);
+    const icon = ICON_RE.exec(file);
+    if (icon && icon[1] === id) matchedAnimation.push(file);
   }
-  const hasClose = matched.some((file) => /_close(?:_mouth)?\./i.test(file));
-  const hasOpen = matched.some((file) => /_open(?:_mouth)?\./i.test(file));
-  if (!hasClose || !hasOpen) throw new HttpError(404, 'character not found');
-  for (const file of matched) {
+  const hasClose = matchedStatic.some((file) => /_close(?:_mouth)?\./i.test(file));
+  const hasOpen = matchedStatic.some((file) => /_open(?:_mouth)?\./i.test(file));
+  const hasAtlas = matchedAnimation.some((file) => /_atlas\./i.test(file));
+  if ((!hasClose || !hasOpen) && !hasAtlas) throw new HttpError(404, 'character not found');
+  for (const file of [...matchedStatic, ...matchedAnimation]) {
     await safeUnlink(path.join(IMAGE_DIR, file));
   }
 }
