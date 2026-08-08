@@ -1,0 +1,35 @@
+ 生成一段 9 秒循环动画，输出为透明背景 PNG 序列帧，共 108 帧，命名从 dopnghaidihuang000.png 到    
+  dopnghaidihuang107.png。                                                                         
+                                                                                                   
+  角色：东海帝皇风格的可爱 Q 版赛马娘少女吉祥物，不要写实，不要复杂背景。                          
+  画面风格：明亮、干净、可爱、二次元 Q 版卡通，线条清晰，色块干净，适合网页互动音乐玩具。          
+  构图：角色正面朝向观众，全身或半身居中，主体稳定，不要大幅位移。                                 
+  背景：透明背景 PNG，不能有白底、灰底、纯色底、阴影底板或场景背景。                               
+  画幅：竖构图，建议 1920×1080 或更高；角色需要位于画面中央偏右区域，保证后期裁剪                  
+  crop=672:960:636:100 后仍完整。                                                                  
+  动作：角色随节拍轻轻律动，动作可爱活泼，包括轻微上下跳动、眨眼、头发和耳朵轻摆、手部小幅摆动。   
+  循环：首尾必须无缝循环，第 0 帧和最后一帧姿态、位置、表情、光影应尽量一致。                      
+  稳定性：角色身份、服装、脸型、发色、耳朵、眼睛、身体比例必须全程一致，不能变脸、变衣服、变发型、 
+  变画风。                                                                                         
+  嘴部：嘴巴可以轻微开合，但不要夸张变形。                                                         
+  相机：固定机位，不能推拉、旋转、摇晃、变焦。                                                     
+  禁止：不要文字、不要 logo、不要水印、不要背景、不要多角色、不要镜头切换、不要过度复杂特效、不要闪
+  烁、不要手脚突然变形、不要身体漂移出画面。                                                       
+                                                                                                   
+  输出要求：                                                                                       
+  1. 透明背景 PNG 序列帧；                                                                         
+  2. 共 108 帧；                                                                                   
+  3. 文件名严格为 dopnghaidihuang000.png、dopnghaidihuang001.png ... dopnghaidihuang107.png；      
+  4. 每张图片尺寸一致；                                                                            
+  5. 首尾无缝循环；                                                                                
+  6. 角色始终在同一位置附近，方便拼成网页精灵图。                                                  
+                                                                                                   
+  如果 AI 工具支持负面提示词，再加这一段：                                                         
+                                                                                                   
+  负面提示词：                                                                                     
+  white background, black background, solid color background, scenery, text, logo, watermark,      
+  subtitles, multiple characters, camera movement, zoom, rotation, motion blur, flicker,           
+  inconsistent face, inconsistent outfit, extra limbs, deformed hands, bad anatomy, cropped        
+  character, low resolution, noisy edges, non-transparent background                               
+                                                                                                   
+  生成好 108 张 PNG 后打包成一个 zip 文件 
