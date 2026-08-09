@@ -1,0 +1,17 @@
+# Vercel deployment ignore list (gitignore syntax).
+# Files tracked in git but NOT needed on Vercel (static CDN + serverless API only).
+# Applied at upload stage (before build), so anything the build needs must stay.
+
+# Dev / verification tools — includes hundreds of temp PNG frames under tools/tmp/
+tools/
+
+# Source audio wavs — frontend uses the base64 bundle audio-data.js, never fetches audio/*.wav
+audio/
+
+# Design docs (markdown, not rendered on Vercel)
+docs/
+
+# Local-only Node server and launcher scripts (Vercel runtime uses api/ + lib/ instead)
+server.js
+start.bat
+1git.bat

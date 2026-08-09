@@ -37,6 +37,7 @@ scripts/build-builtin-characters.mjs  构建脚本：扫描 Image/ 生成 data/b
 data/builtin-characters.json  构建产物：内置形象清单，供 Vercel GET 只读（由 build 生成，已 .gitignore）
 vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles）
 package.json            npm 依赖（@vercel/blob）与脚本（build / dev / start）
+.vercelignore           Vercel 上传排除清单（tools/、audio/、docs/、本地脚本），减小部署体积
 audio-data.js           九段音效的 base64 内嵌包（由 tools/build_audio_data.mjs 生成）
 audio/                  九段源音频 wav
   da.wav gou.wav jiao.wav
@@ -109,6 +110,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 - **请求体大小**：Vercel Hobby 计划单个请求体上限约 **4.5 MB**（两张 base64 PNG 合计）。网页已把上传图压缩到约 360px 宽，通常远低于此；若仍超限会收到错误提示，请换更小的图。
 - **构建期排除 `custom_`**：构建脚本跳过 `Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `Image/custom_*` 测试图不会出现在线上清单。
 - **本地开发仍用 `server.js`**：`npm run dev` 跑本地服务器（写 `Image/`）；Vercel 函数（写 Blob）只在部署后生效。
+- **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat`），减小上传体积。`scripts/` 必须保留——构建期要跑 build 脚本。
 
 ## 后端 API
 
