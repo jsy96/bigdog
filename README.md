@@ -30,7 +30,7 @@
 public/                 前端静态站点根（Vercel 标准静态目录；本地 server 也从此目录服务）
   index.html            入口页面（含全部样式与 DOM）
   main.js               核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
-  audio-data.json       九段音效的 base64 包（前端 fetch 异步加载；由 scripts/convert-audio-data-to-json.mjs 从 audio-data.js 转换）
+  audio-data.json       九段音效的 MP3 base64 包（前端 fetch 异步加载；由 scripts/build-audio-data-json.py 从 audio-data.js 压缩转换，~50KB）
   audio-data.js         同一份数据的 JS 源（convert 输入；已 .vercelignore，不上传到 Vercel）
   Image/                图片资源（角色闭嘴/张嘴图、帝皇图集等）
     dagou_close_mouth.webp dagou_open_mouth.webp
@@ -44,7 +44,7 @@ scripts/
   server.js             本地后端服务器：静态服务、Image 扫描、形象上传 / 删除 API（零依赖，仅 Node 内置模块）
   build-builtin-characters.mjs  构建脚本：扫描 public/Image/ 生成 data/builtin-characters.json
   convert-png-to-webp.py     一次性脚本：核心角色 PNG → WebP（首屏体积优化，uv + Pillow 运行）
-  convert-audio-data-to-json.mjs  把 public/audio-data.js 转成 audio-data.json（前端 fetch 异步加载）
+  build-audio-data-json.py  把 public/audio-data.js（WAV）压缩转成 audio-data.json（MP3，前端 fetch 异步加载；内置 YIN 音准校验）
 data/builtin-characters.json  构建产物：内置形象清单，供 Vercel GET 只读（由 build 生成，已 .gitignore）
 audio/                  九段源音频 wav（前端不引用，仅用于重建 audio-data.js；已 .vercelignore）
   da.wav gou.wav jiao.wav
@@ -116,7 +116,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 - **构建期排除 `custom_`**：构建脚本跳过 `public/Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `public/Image/custom_*` 测试图不会出现在线上清单。
 - **本地开发仍用 `server.js`**：`npm run dev` 跑本地服务器（写 `Image/`）；Vercel 函数（写 Blob）只在部署后生效。
 - **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat`），减小上传体积；`audio-data.js` 也已排除（前端改用 `audio-data.json`，js 仅作 convert 源）。`scripts/` 必须保留——构建期要跑 build 脚本。
-- **首屏性能优化**：① 核心角色图（大狗 / 叮咚鸡 / 哈基米 + 1_1 / 2_2）由 PNG 转 WebP，约 4.9 MB → 310 KB；② 音频 base64 包改为 `audio-data.json`，`main.js` 在页面加载即 `fetch` 异步获取（`<link rel="preload" as="fetch">` 提前发起），不再用同步 `<script>` 阻塞首屏解析；`main.js` 同样 `preload` 并行下载；③ `vercel.json` 为 `Image/*` 与 `*.js` 设 `immutable` 长缓存（`index.html` 走 `must-revalidate` 保证更新即时生效），二次访问近瞬开。
+- **首屏性能优化**：① 核心角色图（大狗 / 叮咚鸡 / 哈基米 + 1_1 / 2_2）由 PNG 转 WebP，约 4.9 MB → 310 KB；② 音频由 WAV（base64 764KB）压成 MP3（base64 ~50KB，省 93%）存 `audio-data.json`，`main.js` 页面加载即 `fetch` 异步获取（`<link rel="preload" as="fetch">` 提前发起），不再用同步 `<script>` 阻塞首屏；MP3 解码波形与原 WAV 相似度 >99%，音高不变；`main.js` 同样 `preload` 并行下载；③ `vercel.json` 为 `Image/*` 与 `*.js` 设 `immutable` 长缓存（`index.html` 走 `must-revalidate` 保证更新即时生效），二次访问近瞬开。
 
 ## 后端 API
 
@@ -184,8 +184,8 @@ node tools/verify_interaction_queue.mjs                                # 交互�
 # 核心角色图 PNG → WebP（一次性首屏体积优化，需 uv + Pillow；转换后同步改 index.html / main.js 引用并重跑 npm run build）
 uv run --no-project --with Pillow scripts/convert-png-to-webp.py
 
-# 把 audio-data.js 转成前端 fetch 用的 audio-data.json（重建音频后重跑：先 build_audio_data.mjs 再本脚本）
-node scripts/convert-audio-data-to-json.mjs
+# 把 audio-data.js（WAV）压成 audio-data.json（MP3），前端 fetch 异步加载（重建音频后重跑：先 build_audio_data.mjs 再本脚本）
+uv run --no-project --with numpy scripts/build-audio-data-json.py
 ```
 
-音高分析依赖 Python 3 + NumPy（本机用 uv 管理），角色动画压缩依赖 Node.js + FFmpeg。所有报告与临时产物放在 `tools/tmp/`，生产页面不得依赖其中任何文件。
+音高分析依赖 Python 3 + NumPy（本机用 uv 管理），角色动画压缩依赖 Node.js + FFmpeg，音频 WAV→MP3 压缩依赖 ffmpeg + NumPy（脚本内置 YIN 音准校验）。所有报告与临时产物放在 `tools/tmp/`，生产页面不得依赖其中任何文件。
