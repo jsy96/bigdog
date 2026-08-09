@@ -5,4 +5,3 @@ __pycache__/
 # Node / Vercel
 node_modules/
 .vercel/
-/data/
