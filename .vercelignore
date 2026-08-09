@@ -4,8 +4,12 @@
 # Dev / verification tools (hundreds of temp PNG frames under tools/tmp/)
 tools/
 
-# Source audio wavs — frontend uses the base64 bundle public/audio-data.js, never fetches audio/*.wav
+# Source audio wavs — frontend fetches the base64 bundle public/audio-data.json, never uses audio/*.wav
 audio/
+
+# audio-data.js is only the conversion source for audio-data.json (scripts/convert-audio-data-to-json.mjs);
+# the frontend loads audio-data.json via fetch, so the .js bundle is not uploaded.
+public/audio-data.js
 
 # Design docs (markdown, not rendered on Vercel)
 docs/

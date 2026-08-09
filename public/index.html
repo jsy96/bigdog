@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#fff2dc" />
 <title>大狗Tap</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>" />
+<link rel="preload" href="audio-data.json?v=20260721-hajimi-new" as="fetch" crossorigin="anonymous" />
+<link rel="preload" href="main.js?v=20260810-async-audio" as="script" />
 <style>
   /* 全页面限定调色板：米白底 + 主色黄 + 次色灰（极少点缀色） */
   :root {
@@ -438,8 +440,8 @@
     <div id="dog">
       <div id="dog-inner" class="is-hajimi">
         <div id="dog-jelly">
-          <img id="dog-close" src="Image/maodie_close_mouth.png" alt="哈基米" draggable="false" />
-          <img id="dog-open" src="Image/maodie_open_mouth.png" alt="" draggable="false" />
+          <img id="dog-close" src="Image/maodie_close_mouth.webp" alt="哈基米" draggable="false" />
+          <img id="dog-open" src="Image/maodie_open_mouth.webp" alt="" draggable="false" />
           <canvas id="dog-animation" width="360" height="514" role="img" aria-label="东海帝皇循环动画" aria-hidden="true"></canvas>
         </div>
       </div>
@@ -466,7 +468,7 @@
           <span id="sfx-set-label">ha-ji-mi</span>
         </button>
         <button id="character-set-toggle" class="control-button character-set-button" type="button" aria-label="切换形象，当前哈基米">
-          <img id="character-set-icon" class="character-set-icon" src="Image/maodie_close_mouth.png" alt="" draggable="false" />
+          <img id="character-set-icon" class="character-set-icon" src="Image/maodie_close_mouth.webp" alt="" draggable="false" />
         </button>
         <button id="character-add-toggle" class="control-button character-add-button" type="button" aria-label="添加自定义形象">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -537,7 +539,6 @@
     </div>
   </div>
 
-  <script src="audio-data.js?v=20260721-hajimi-new"></script>
-  <script src="main.js?v=20260808-animation-hide-static"></script>
+  <script src="main.js?v=20260810-async-audio"></script>
 </body>
 </html>

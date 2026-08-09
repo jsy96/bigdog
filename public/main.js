@@ -79,9 +79,9 @@ const CHARACTER_IMAGE_SETS = {};
 // 服务器不可用时的兜底形象（直接 file:// 打开 / 后端未启动时仍可基本游玩）。
 // 正常通过后端访问时，loadCharactersFromServer 会用 Image 目录扫描结果整体覆盖。
 const BUILTIN_FALLBACK_CHARACTERS = [
-  { id: 'dagou', label: '大狗', type: 'static', icon: 'Image/dagou_close_mouth.png', close: 'Image/dagou_close_mouth.png', open: 'Image/dagou_open_mouth.png', builtin: true },
-  { id: 'dingdongji', label: '叮咚鸡', type: 'static', icon: 'Image/dingdongji_close_mouth.png', close: 'Image/dingdongji_close_mouth.png', open: 'Image/dingdongji_open_mouth.png', builtin: true },
-  { id: 'maodie', label: '哈基米', type: 'static', icon: 'Image/maodie_close_mouth.png', close: 'Image/maodie_close_mouth.png', open: 'Image/maodie_open_mouth.png', builtin: true },
+  { id: 'dagou', label: '大狗', type: 'static', icon: 'Image/dagou_close_mouth.webp', close: 'Image/dagou_close_mouth.webp', open: 'Image/dagou_open_mouth.webp', builtin: true },
+  { id: 'dingdongji', label: '叮咚鸡', type: 'static', icon: 'Image/dingdongji_close_mouth.webp', close: 'Image/dingdongji_close_mouth.webp', open: 'Image/dingdongji_open_mouth.webp', builtin: true },
+  { id: 'maodie', label: '哈基米', type: 'static', icon: 'Image/maodie_close_mouth.webp', close: 'Image/maodie_close_mouth.webp', open: 'Image/maodie_open_mouth.webp', builtin: true },
   { id: 'donghaidihuang', label: '帝皇', type: 'animation', icon: 'Image/donghaidihuang_icon.webp', atlas: 'Image/donghaidihuang_atlas.webp', builtin: true },
 ];
 
@@ -1454,7 +1454,26 @@ function b64ToArrayBuffer(b64) {
   return bytes.buffer;
 }
 
+// 异步加载音频 base64 包（audio-data.json）。页面初始化时即 prefetch，
+// 用户首次点击进入 start() -> loadSamples 时 await 同一个 promise，通常早已就绪。
+let audioB64Promise = null;
+function ensureAudioB64() {
+  if (!audioB64Promise) {
+    audioB64Promise = fetch('audio-data.json?v=20260721-hajimi-new', { cache: 'force-cache' })
+      .then((r) => {
+        if (!r.ok) throw new Error(`audio-data.json HTTP ${r.status}`);
+        return r.json();
+      })
+      .catch((err) => {
+        audioB64Promise = null; // 失败重置，允许下次交互重试
+        throw err;
+      });
+  }
+  return audioB64Promise;
+}
+
 async function loadSamples() {
+  const AUDIO_B64 = await ensureAudioB64();
   for (const n of RUNTIME_SAMPLE_NAMES) {
     const encoded = AUDIO_B64[n];
     if (typeof encoded !== 'string' || encoded.length === 0) {
@@ -3346,6 +3365,9 @@ if (window.ResizeObserver) {
   const stageResizeObserver = new ResizeObserver(handleLayoutResize);
   stageResizeObserver.observe(stage);
 }
+
+// 页面加载即 prefetch 音频 base64 包（audio-data.json），用户点击开始时通常已就绪。
+ensureAudioB64();
 
 buildGrid();
 fxResize();
