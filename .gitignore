@@ -1,3 +1,8 @@
 /Dagou-Tap-New.zip
 __pycache__/
 *.pyc
+
+# Node / Vercel
+node_modules/
+.vercel/
+/data/

@@ -1,0 +1,14 @@
+{
+  "name": "dagou-tap",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dagou Tap - interactive rhythm toy (Mikutap-style)",
+  "scripts": {
+    "build": "node scripts/build-builtin-characters.mjs",
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.7.0"
+  }
+}
