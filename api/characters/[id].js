@@ -9,9 +9,14 @@ const BUILTIN_IDS = new Set(['dagou', 'dingdongji', 'maodie', 'donghaidihuang'])
 
 function sendJson(res, status, obj) {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store');
-  res.status(status).end(body);
+  // @vercel/node 给的 res 是原生 Node ServerResponse，没有 Express 的 res.status()；
+  // 必须用 res.writeHead(status, headers) 设状态码与响应头（与 server.js 一致）。
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': body.length,
+  });
+  res.end(body);
 }
 
 module.exports = async (req, res) => {
