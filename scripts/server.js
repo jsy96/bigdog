@@ -18,7 +18,9 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 
-const ROOT = __dirname;
+// 前端静态文件已移到 public/（Vercel 标准静态目录）；本文件在 scripts/，
+// 故 ROOT 指向上一级项目根下的 public/。
+const ROOT = path.join(__dirname, '..', 'public');
 const IMAGE_DIR = path.join(ROOT, 'Image');
 const META_FILE = path.join(IMAGE_DIR, 'characters.json');
 const PORT = Number(process.env.PORT) || 8000;

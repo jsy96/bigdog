@@ -39,7 +39,7 @@ echo  Local:   http://localhost:%PORT%/
 echo  API:     http://localhost:%PORT%/api/characters
 echo  Press Ctrl+C to stop.
 echo ------------------------------------------------------------
-node server.js
+node scripts/server.js
 set EXIT_CODE=%ERRORLEVEL%
 
 echo.

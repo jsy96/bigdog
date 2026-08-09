@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const IMAGE_DIR = path.join(ROOT, 'Image');
+const IMAGE_DIR = path.join(ROOT, 'public', 'Image');
 const OUT_FILE = path.join(ROOT, 'data', 'builtin-characters.json');
 
 // 内置形象的中文名文案与循环顺序（与 server.js 保持一致）。

@@ -27,40 +27,42 @@
 ## 目录结构
 
 ```
-index.html              入口页面（含全部样式与 DOM）
-main.js                 核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
-server.js               本地后端服务器：静态服务、Image 扫描、形象上传 / 删除 API（零依赖，仅 Node 内置模块）
-start.bat               Windows 启动脚本（英文输出，避免 CMD 中文乱码）
-api/                    Vercel Serverless Functions（characters.js 处理 GET/POST，characters/[id].js 处理 DELETE）
+public/                 前端静态站点根（Vercel 标准静态目录；本地 server 也从此目录服务）
+  index.html            入口页面（含全部样式与 DOM）
+  main.js               核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
+  audio-data.js         九段音效的 base64 内嵌包（由 tools/build_audio_data.mjs 生成）
+  Image/                图片资源（角色闭嘴/张嘴图、帝皇图集等）
+    dagou_close_mouth.png dagou_open_mouth.png
+    dingdongji_close_mouth.png dingdongji_open_mouth.png
+    maodie_close_mouth.png maodie_open_mouth.png
+    donghaidihuang_atlas.webp donghaidihuang_icon.webp
+    characters.json     自定义形象显示名清单（本地后端自动维护）
+api/                    Vercel Serverless Functions（characters.js GET/POST，characters/[id].js DELETE）
 lib/blob-storage.cjs    Vercel Blob 封装：自定义形象的图片与元数据读写（@vercel/blob 为 ESM，用 dynamic import 加载）
-scripts/build-builtin-characters.mjs  构建脚本：扫描 Image/ 生成 data/builtin-characters.json
+scripts/
+  server.js             本地后端服务器：静态服务、Image 扫描、形象上传 / 删除 API（零依赖，仅 Node 内置模块）
+  build-builtin-characters.mjs  构建脚本：扫描 public/Image/ 生成 data/builtin-characters.json
 data/builtin-characters.json  构建产物：内置形象清单，供 Vercel GET 只读（由 build 生成，已 .gitignore）
-vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles）
-package.json            npm 依赖（@vercel/blob）与脚本（build / dev / start）
-.vercelignore           Vercel 上传排除清单（tools/、audio/、docs/、本地脚本），减小部署体积
-audio-data.js           九段音效的 base64 内嵌包（由 tools/build_audio_data.mjs 生成）
-audio/                  九段源音频 wav
+audio/                  九段源音频 wav（前端不引用，仅用于重建 audio-data.js；已 .vercelignore）
   da.wav gou.wav jiao.wav
   ha_new.wav ji_new.wav mi_new.wav
   dingdongji_ding.wav dingdongji_dong.wav dingdongji_ji.wav
-Image/                  图片资源（角色闭嘴/张嘴图、帝皇图集、自定义形象与 characters.json）
-  dagou_close_mouth.png dagou_open_mouth.png
-  dingdongji_close_mouth.png dingdongji_open_mouth.png
-  maodie_close_mouth.png maodie_open_mouth.png
-  donghaidihuang_atlas.webp donghaidihuang_icon.webp
-  characters.json       自定义形象显示名清单（由后端自动维护）
 docs/
   audio-pitch-harmony.md   音高变调与和声设计依据（乐理 + YIN 检测 + 倍率算法）
-tools/                     开发与验证工具，不参与网页运行，发布可整体排除
+tools/                     开发与验证工具，不参与网页运行（已 .vercelignore）
   analyze_pitch.py            逐帧 YIN 音高检测 + 响度校准（需 Python + NumPy）
   find_piano_minimax.py       为超限的「样本 + 起始八度」搜索单一 minimax 锚点
-  build_audio_data.mjs        从 audio/ 重建 audio-data.js 的 base64 包
+  build_audio_data.mjs        从 audio/ 重建 public/audio-data.js 的 base64 包
   build_character_animation.mjs  把东海帝皇透明 PNG 序列压成精灵图 WebP
-  build_animation_from_mp4.mjs   把 MP4 循环动画转成 Image/{id}_atlas.webp / Image/{id}_icon.webp
+  build_animation_from_mp4.mjs   把 MP4 循环动画转成 public/Image/{id}_atlas.webp / public/Image/{id}_icon.webp
   verify_runtime_mapping.mjs  提取并执行 main.js 映射函数，对照分析报告回归
   verify_interaction_queue.mjs 验证滑动补全、节奏排队与长音换调
+start.bat               Windows 启动脚本（英文输出，跑 scripts/server.js）
 提示词.txt                AI 绘图提示词：照此生成符合要求的"闭嘴/张嘴"双图，用于自定义形象
-README.md                 项目说明（本文件）
+vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles）
+package.json            npm 依赖（@vercel/blob）与脚本（build / dev / start）
+.vercelignore           Vercel 上传排除清单（tools/、audio/、docs/、本地脚本），减小部署体积
+README.md               项目说明（本文件）
 .gitignore
 ```
 
@@ -73,24 +75,24 @@ README.md                 项目说明（本文件）
 # 如果 8000 被占用，start.bat 会自动尝试 8001、8002 ...，并在窗口里显示实际访问地址。
 
 # 方式二：命令行启动
-node server.js
+node scripts/server.js
 # 然后访问 http://localhost:8000/
 
 # 可选：改端口
-PORT=8011 node server.js
+PORT=8011 node scripts/server.js
 ```
 
 首次进入需点击一次以解锁音频（浏览器自动播放策略），之后即可演奏。
 
 ## 部署到 Vercel
 
-本项目可一键部署到 Vercel：静态前端（`index.html` / `main.js` / `audio-data.js` / `Image` / `audio`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。
+本项目可一键部署到 Vercel：`public/` 下的静态前端（`index.html` / `main.js` / `audio-data.js` / `Image`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。
 
 ### 与本地部署的差异
 
 | | 本地 `server.js` | Vercel |
 |---|---|---|
-| 静态文件 | `server.js` 自带静态服务 | Vercel 静态 CDN（项目根目录） |
+| 静态文件 | `scripts/server.js` 服务 `public/` | Vercel 静态 CDN（`public/`） |
 | 内置形象清单 | 启动时扫描 `Image/` | **构建期**生成 `data/builtin-characters.json`（`npm run build`），函数只读 |
 | 自定义形象存储 | 写入 `Image/` + `characters.json` | **Vercel Blob**（图片 + 元数据，无文件系统） |
 | 形象 API 实现 | `server.js` 内联 | `api/characters.js` / `api/characters/[id].js` |
@@ -100,7 +102,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 ### 部署步骤
 
 1. 把项目推到 GitHub，在 Vercel 导入该仓库（或用 `vercel` CLI）。
-2. Vercel 自动按 `vercel.json` 处理：运行 `npm run build` 生成内置清单，`api/` 作为函数，根目录静态文件作为站点。
+2. Vercel 自动按 `vercel.json` 处理：运行 `npm run build` 生成内置清单，`api/` 作为函数，`public/` 作为静态站点。
 3. **启用自定义形象上传（可选但推荐）**：在 Vercel 项目里创建一个 **Blob Store**（Dashboard → Storage → Create → Blob）并连接到项目，Vercel 会自动注入环境变量 `BLOB_READ_WRITE_TOKEN`。
    - 不配 Blob 也能部署成功：页面正常游玩、内置形象与三套音色全部可用，只是「+ 上传自定义形象」会返回 503。
 4. 部署完成后访问 Vercel 分配的域名即可。
@@ -108,7 +110,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 ### Vercel 上的注意事项
 
 - **请求体大小**：Vercel Hobby 计划单个请求体上限约 **4.5 MB**（两张 base64 PNG 合计）。网页已把上传图压缩到约 360px 宽，通常远低于此；若仍超限会收到错误提示，请换更小的图。
-- **构建期排除 `custom_`**：构建脚本跳过 `Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `Image/custom_*` 测试图不会出现在线上清单。
+- **构建期排除 `custom_`**：构建脚本跳过 `public/Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `public/Image/custom_*` 测试图不会出现在线上清单。
 - **本地开发仍用 `server.js`**：`npm run dev` 跑本地服务器（写 `Image/`）；Vercel 函数（写 Blob）只在部署后生效。
 - **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat`），减小上传体积。`scripts/` 必须保留——构建期要跑 build 脚本。
 
@@ -144,7 +146,7 @@ Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使�
 
 内置形象之外，可上传自己的图做成新形象：
 
-1. 通过 `node server.js` 或 `start.bat` 打开服务，访问 `http://localhost:8000/`。
+1. 通过 `node scripts/server.js` 或 `start.bat` 打开服务，访问 `http://localhost:8000/`。
 2. 点击顶部「形象」按钮右侧的「**+**」，打开「添加自定义形象」面板。
 3. 点「闭嘴」槽选一张图、点「张嘴」槽选一张图（两个槽可任意顺序选；保存时会自动把张嘴图对齐到闭嘴图尺寸，保证张嘴动画不跳）。
 4. 点中间预览区可切换查看张嘴效果，确认无误后填名称（≤6 字），点「保存并使用」。
