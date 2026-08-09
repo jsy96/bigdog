@@ -8,8 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build-builtin-characters.mjs",
-    "dev": "node server.js",
-    "start": "node server.js"
+    "dev": "node scripts/server.js"
   },
   "dependencies": {
     "@vercel/blob": "^2.7.0"

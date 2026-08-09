@@ -60,7 +60,7 @@ tools/                     开发与验证工具，不参与网页运行（已 .
 start.bat               Windows 启动脚本（英文输出，跑 scripts/server.js）
 提示词.txt                AI 绘图提示词：照此生成符合要求的"闭嘴/张嘴"双图，用于自定义形象
 vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles）
-package.json            npm 依赖（@vercel/blob）与脚本（build / dev / start）
+package.json            npm 依赖（@vercel/blob）与脚本（build / dev）；不含 start 脚本，避免 Vercel 误判为 Node server
 .vercelignore           Vercel 上传排除清单（tools/、audio/、docs/、本地脚本），减小部署体积
 README.md               项目说明（本文件）
 .gitignore
