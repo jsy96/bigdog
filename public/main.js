@@ -1478,6 +1478,15 @@ function ensureAudioB64() {
   return audioB64Promise;
 }
 
+// iOS Safari 的 decodeAudioData Promise 形式对部分格式（如 WAV）不稳定——可能
+// 既不 resolve 也不 reject，await 永久挂起、卡在「狗叫加载中」。回调形式是该 API
+// 的原始契约、兼容性最好，手动包成 Promise 规避（mp3 走 Promise 形式正常，仅 WAV 触发）。
+function decodeAudioDataCompat(ctx, arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    ctx.decodeAudioData(arrayBuffer, resolve, reject);
+  });
+}
+
 // 并行解码全部音效样本（在 start() 用户手势内创建的 ctx 上执行）。
 // decodeAudioData 在音频线程、本可并发；Promise.all 并行后只等最慢的一个，
 // 比 for...of + await 串行解码（9 个样本耗时累加）显著更快。
@@ -1489,7 +1498,7 @@ async function loadSamples() {
       throw new Error(`Missing embedded audio sample: ${n}`);
     }
     // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换。
-    return ctx.decodeAudioData(b64ToArrayBuffer(encoded)).then((buf) => {
+    return decodeAudioDataCompat(ctx, b64ToArrayBuffer(encoded)).then((buf) => {
       buffers[n] = buf;
     });
   });
@@ -3371,24 +3380,31 @@ async function start() {
   hideControlsUntilIdle();
   subEl.textContent = '狗 叫 加 载 中 …';
 
-  // 正式 AudioContext 必须在用户手势内创建（iOS 严格要求，否则即使 resume 也静音）。
-  initAudio();
-  // resume 必须在用户手势的同步调用段内触发（iOS 严格要求），先于任何 await。
-  const resumePromise = ctx.state === 'suspended' ? ctx.resume() : null;
-  // 用页面加载阶段预解码好的 PCM，在正式 ctx 上重建 AudioBuffer（纯内存，毫秒级）。
-  await loadSamples();
-  if (resumePromise) await resumePromise;
+  try {
+    // 正式 AudioContext 必须在用户手势内创建（iOS 严格要求，否则即使 resume 也静音）。
+    initAudio();
+    // resume 必须在用户手势的同步调用段内触发（iOS 严格要求），先于任何 await。
+    const resumePromise = ctx.state === 'suspended' ? ctx.resume() : null;
+    // 并行解码样本（decodeAudioDataCompat 回调形式，规避 iOS 对 WAV Promise 形式的不稳定）。
+    await loadSamples();
+    if (resumePromise) await resumePromise;
 
-  startTime = ctx.currentTime + 0.12;
-  nextNoteTime = startTime;
-  lastCommittedInputTime = -Infinity;
-  inputQueue.length = 0;
-  stepCount = 0;
-  setInterval(scheduler, 25);
+    startTime = ctx.currentTime + 0.12;
+    nextNoteTime = startTime;
+    lastCommittedInputTime = -Infinity;
+    inputQueue.length = 0;
+    stepCount = 0;
+    setInterval(scheduler, 25);
 
-  overlay.classList.add('hide');
-  // 延音纹理在遮罩隐藏后后台构建，不阻塞首屏进入（见 buildSustainTexturesAsync）。
-  buildSustainTexturesAsync();
+    overlay.classList.add('hide');
+    // 延音纹理在遮罩隐藏后后台构建，不阻塞首屏进入（见 buildSustainTexturesAsync）。
+    buildSustainTexturesAsync();
+  } catch (err) {
+    // 解码失败（或 iOS 对该格式不兼容）时给出可见错误，而不是静默卡在加载界面。
+    console.error('[大狗Tap] 音频加载失败', err);
+    showToyNotice('音频加载失败，点屏幕重试：' + (err && err.message ? err.message : err), true);
+    started = false; // 允许再次点击重试
+  }
 }
 
 let resizeTimer = 0;
