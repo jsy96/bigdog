@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
-"""从 public/audio-data.js（WAV base64 源）生成 public/audio-data.json（MP3 base64）。
+"""从 public/audio-data.js（WAV base64 源）生成 public/audio-data.json（WAV base64）。
 
-用 ffmpeg 把每段 WAV 压成 mono / 32kHz / 96kbps MP3，大幅缩小前端 fetch 体积
-（移动端点击后出声更快）。浏览器 decodeAudioData 原生支持 MP3，前端 main.js 无需改动。
+用 ffmpeg 把每段源 WAV 标准化为 mono / 32kHz / 16bit PCM WAV，直接 base64 写入。
+浏览器 decodeAudioData 对未压缩 WAV 近乎零成本（基本是内存映射），避开 mp3 解压
+（霍夫曼 + IMDCT）在 iOS Safari 上 1~2 秒的解码耗时——iOS 冻结非手势 Web Audio
+context，解码无法提前到点击之前，只能在 start() 手势后进行，故解码本身越快越好。
+详见 memory: ios-webaudio-gesture-rule。
 
-同时用自相关法对比「原 WAV」与「MP3 往返解码后」的基频，量化有损编码对音高的影响：
-项目靠 playbackRate 精确对齐 A 小调五声音阶，相邻半音 = 6%，故偏差 < 0.5% 即安全。
+代价：数据包体积约为 mp3 版的 5 倍（~260KB vs 50KB），但 iOS 省 1~2 秒解码，配合
+main.js 的并行 decodeAudioData，移动端点击后近即时出声。main.js 无需改动
+（decodeAudioData 对 WAV 与 MP3 同样工作）。
+
+同时用 YIN 对比「源 WAV」与「标准化 WAV」的基频，确认重采样未改变音高
+（项目靠 playbackRate 对齐 A 小调五声音阶，相邻半音 = 6%，故偏差 < 0.5% 即安全）。
 
 运行：uv run --no-project --with numpy scripts/build-audio-data-json.py
 依赖：ffmpeg（本机已装 7.1）。
@@ -22,8 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "public" / "audio-data.js"
 OUT = ROOT / "public" / "audio-data.json"
 
-AR = 32000   # 输出采样率（与源一致）
-BR = "96k"   # MP3 码率（mono 短音效足够）
+AR = 32000   # 输出采样率（与历史 mp3 方案一致，控制体积；mono 16bit = 64KB/s）
 
 
 def run_ffmpeg(input_bytes, *args):
@@ -35,9 +41,10 @@ def run_ffmpeg(input_bytes, *args):
     return proc.stdout
 
 
-def wav_to_mp3(wav_bytes):
+def normalize_wav(wav_bytes):
+    """源 WAV -> mono / 32kHz / 16bit PCM WAV（无损、decodeAudioData 零成本）。"""
     return run_ffmpeg(
-        wav_bytes, "-ac", "1", "-ar", str(AR), "-c:a", "libmp3lame", "-b:a", BR, "-f", "mp3"
+        wav_bytes, "-ac", "1", "-ar", str(AR), "-c:a", "pcm_s16le", "-f", "wav"
     )
 
 
@@ -120,29 +127,29 @@ def main():
 
     out = {}
     total_in = total_out = 0
-    print(f"{'key':<18}{'WAV':>9}{'MP3':>9}{'压缩':>7}   基频 WAV→MP3 (偏差)")
+    print(f"{'key':<18}{'源WAV':>9}{'PCM WAV':>9}{'比':>6}   基频 源->标准化 (偏差)")
     print("-" * 64)
     for k, b64 in pairs.items():
-        wav = base64.b64decode(b64)
-        mp3 = wav_to_mp3(wav)
-        out[k] = base64.b64encode(mp3).decode()
-        total_in += len(wav)
-        total_out += len(mp3)
+        src_wav = base64.b64decode(b64)
+        pcm_wav = normalize_wav(src_wav)
+        out[k] = base64.b64encode(pcm_wav).decode()
+        total_in += len(src_wav)
+        total_out += len(pcm_wav)
 
-        p_in = detect_pitch(decode_mono_f32(wav), AR)
-        p_out = detect_pitch(decode_mono_f32(mp3), AR)
+        p_in = detect_pitch(decode_mono_f32(src_wav), AR)
+        p_out = detect_pitch(decode_mono_f32(pcm_wav), AR)
         if p_in and p_out:
             drift = (p_out - p_in) / p_in * 100
-            pitch_str = f"{p_in:6.0f}→{p_out:6.0f}Hz  {drift:+.2f}%"
+            pitch_str = f"{p_in:6.0f}->{p_out:6.0f}Hz  {drift:+.2f}%"
         else:
-            pitch_str = "（基频不稳定，跳过）"
+            pitch_str = "(基频不稳定，跳过)"
 
-        print(f"{k:<18}{len(wav)/1024:7.0f}KB{len(mp3)/1024:6.0f}KB"
-              f"{len(mp3)/len(wav)*100:6.0f}%   {pitch_str}")
+        print(f"{k:<18}{len(src_wav)/1024:7.0f}KB{len(pcm_wav)/1024:6.0f}KB"
+              f"{len(pcm_wav)/len(src_wav)*100:5.0f}%   {pitch_str}")
 
     OUT.write_text(json.dumps(out), encoding="utf-8")
     print("-" * 64)
-    print(f"PCM 合计 {total_in/1024:.0f}KB -> MP3 {total_out/1024:.0f}KB "
+    print(f"源 WAV 合计 {total_in/1024:.0f}KB -> PCM WAV {total_out/1024:.0f}KB "
           f"({total_out/total_in*100:.0f}%)")
     print(f"audio-data.json (base64): {OUT.stat().st_size/1024:.0f}KB")
 

@@ -1465,7 +1465,7 @@ function b64ToArrayBuffer(b64) {
 let audioB64Promise = null;
 function ensureAudioB64() {
   if (!audioB64Promise) {
-    audioB64Promise = fetch('audio-data.json?v=20260810-mp3', { cache: 'force-cache' })
+    audioB64Promise = fetch('audio-data.json?v=20260810-wav', { cache: 'force-cache' })
       .then((r) => {
         if (!r.ok) throw new Error(`audio-data.json HTTP ${r.status}`);
         return r.json();
@@ -1478,55 +1478,22 @@ function ensureAudioB64() {
   return audioB64Promise;
 }
 
-// 预解码：页面加载时即用 OfflineAudioContext 把 9 段 mp3 解码成原始 PCM。
-// OfflineAudioContext 不发声、不受 iOS 自动播放策略限制，可在用户手势之前使用；
-// 而 iOS 解码 mp3 较慢，提前到点击之前完成，用户点击时无需再等。
-// 只存 PCM（Float32Array 副本）——AudioBuffer 不能跨 context 安全复用（尤其 iOS WebKit）。
-let samplesDecodedPromise = null;
-function preloadSamplesPCM() {
-  if (samplesDecodedPromise) return samplesDecodedPromise;
-  // 最小离线 context 仅作解码容器；采样率 44100 与 mp3 源一致。
-  const DecodeCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  const decodeCtx = new DecodeCtx(1, 1, 44100);
-  samplesDecodedPromise = (async () => {
-    const AUDIO_B64 = await ensureAudioB64();
-    const tasks = RUNTIME_SAMPLE_NAMES.map((n) => {
-      const encoded = AUDIO_B64[n];
-      if (typeof encoded !== 'string' || encoded.length === 0) {
-        throw new Error(`Missing embedded audio sample: ${n}`);
-      }
-      // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换。
-      return decodeCtx.decodeAudioData(b64ToArrayBuffer(encoded)).then((buf) => {
-        const channels = [];
-        for (let ch = 0; ch < buf.numberOfChannels; ch++) {
-          channels.push(buf.getChannelData(ch).slice());
-        }
-        return [n, {
-          channels,
-          numberOfChannels: buf.numberOfChannels,
-          length: buf.length,
-          sampleRate: buf.sampleRate,
-        }];
-      });
-    });
-    return new Map(await Promise.all(tasks));
-  })();
-  return samplesDecodedPromise;
-}
-
-// 重建：在手势内创建的正式 AudioContext 上，用预解码 PCM 构造 AudioBuffer。
-// createBuffer + copyToChannel 是纯内存拷贝，远快于 decodeAudioData。
+// 并行解码全部音效样本（在 start() 用户手势内创建的 ctx 上执行）。
+// decodeAudioData 在音频线程、本可并发；Promise.all 并行后只等最慢的一个，
+// 比 for...of + await 串行解码（9 个样本耗时累加）显著更快。
 async function loadSamples() {
-  const pcmMap = await preloadSamplesPCM();
-  for (const n of RUNTIME_SAMPLE_NAMES) {
-    const pcm = pcmMap.get(n);
-    if (!pcm) throw new Error(`Missing decoded PCM for ${n}`);
-    const ab = ctx.createBuffer(pcm.numberOfChannels, pcm.length, pcm.sampleRate);
-    for (let ch = 0; ch < pcm.numberOfChannels; ch++) {
-      ab.copyToChannel(pcm.channels[ch], ch);
+  const AUDIO_B64 = await ensureAudioB64();
+  const tasks = RUNTIME_SAMPLE_NAMES.map((n) => {
+    const encoded = AUDIO_B64[n];
+    if (typeof encoded !== 'string' || encoded.length === 0) {
+      throw new Error(`Missing embedded audio sample: ${n}`);
     }
-    buffers[n] = ab;
-  }
+    // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换。
+    return ctx.decodeAudioData(b64ToArrayBuffer(encoded)).then((buf) => {
+      buffers[n] = buf;
+    });
+  });
+  await Promise.all(tasks);
 }
 
 // 延音纹理（WSOLA）构建是 CPU 密集的同步操作，每条纹理要合成 ~12 秒波形。
@@ -3436,10 +3403,11 @@ if (window.ResizeObserver) {
   stageResizeObserver.observe(stage);
 }
 
-// 页面加载即用 OfflineAudioContext 预解码样本 PCM（不发声、无需用户手势）。
-// iOS 解码 mp3 较慢，提前到点击之前完成；正式 AudioContext 在 start() 用户手势内创建，
-// 再用 createBuffer 把 PCM 重建为 AudioBuffer（毫秒级），既快又不触发 iOS 静音。
-preloadSamplesPCM();
+// 页面加载即 prefetch 音频 base64 包（audio-data.json），用户点击开始时通常已就绪。
+// 注意：不能在用户手势之前用 AudioContext/OfflineAudioContext 解码——iOS 会冻结
+// 非手势创建的 Web Audio context，decodeAudioData 的 promise 永不 resolve 导致卡死。
+// 解码只能在 start() 用户手势内进行（见 loadSamples）。
+ensureAudioB64();
 
 buildGrid();
 fxResize();
