@@ -45,6 +45,7 @@ scripts/
   server.js             本地后端服务器：静态服务、Image 扫描、形象上传 / 删除 API（零依赖，仅 Node 内置模块）
   build-builtin-characters.mjs  构建脚本：扫描 public/Image/ 生成 data/builtin-characters.json
   convert-png-to-webp.py     一次性脚本：核心角色 PNG → WebP（首屏体积优化，uv + Pillow 运行）
+  compress-atlas.py          一次性脚本：重压动画形象图集 *_atlas.webp（手机端切形象提速；默认 dry-run 探测各质量体积，--apply --quality N 写入并备份原图为 *.orig.webp）
   build-audio-data-json.py  把 public/audio-data.js（WAV）压缩转成 audio-data.json（MP3，前端 fetch 异步加载；内置 YIN 音准校验）
 data/builtin-characters.json  构建产物：内置形象清单，供 Vercel GET 只读（由 build 生成，已 .gitignore）
 audio/                  九段源音频 wav（前端不引用，仅用于重建 audio-data.js；已 .vercelignore）
@@ -117,7 +118,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 - **构建期排除 `custom_`**：构建脚本跳过 `public/Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `public/Image/custom_*` 测试图不会出现在线上清单。
 - **本地开发仍用 `server.js`**：`npm run dev` 跑本地服务器（写 `Image/`）；Vercel 函数（写 Blob）只在部署后生效。
 - **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat`），减小上传体积；`audio-data.js` 也已排除（前端改用 `audio-data.json`，js 仅作 convert 源）。`scripts/` 必须保留——构建期要跑 build 脚本。
-- **首屏性能优化**：① 核心角色图（大狗 / 叮咚鸡 / 哈基米 + 1_1 / 2_2）由 PNG 转 WebP，约 4.9 MB → 310 KB；② 音频由 WAV（base64 764KB）压成 MP3（base64 ~50KB，省 93%）存 `audio-data.json`，`main.js` 页面加载即 `fetch` 异步获取（`<link rel="preload" as="fetch">` 提前发起），不再用同步 `<script>` 阻塞首屏；MP3 解码波形与原 WAV 相似度 >99%，音高不变；`main.js` 同样 `preload` 并行下载；③ `vercel.json` 为 `Image/*` 与 `*.js` 设 `immutable` 长缓存（`index.html` 走 `must-revalidate` 保证更新即时生效），二次访问近瞬开。
+- **首屏性能优化**：① 核心角色图（大狗 / 叮咚鸡 / 哈基米 + 1_1 / 2_2）由 PNG 转 WebP，约 4.9 MB → 310 KB；② 音频由 WAV（base64 764KB）压成 MP3（base64 ~50KB，省 93%）存 `audio-data.json`，`main.js` 页面加载即 `fetch` 异步获取（`<link rel="preload" as="fetch">` 提前发起），不再用同步 `<script>` 阻塞首屏；MP3 解码波形与原 WAV 相似度 >99%，音高不变；`main.js` 同样 `preload` 并行下载；③ `vercel.json` 为 `Image/*` 与 `*.js` 设 `immutable` 长缓存（`index.html` 走 `must-revalidate` 保证更新即时生效），二次访问近瞬开；④ **动画图集压缩**：三个动画形象图集（doubao / doubao2 / 帝皇，各 4320×4626 / 108 帧）由 `scripts/compress-atlas.py` 统一重压到 WebP q=60——doubao 系列 6.7 MB → 2.3 MB（省 65%，手机端切到 doubao 形象从下载 3.5 MB 降到 1.1 MB），帝皇原图已是高压缩态、收益小（2.0→1.8 MB）；图集重压后 `main.js` 给 atlas URL 附 `ATLAS_CACHE_BUSTER` 版本号击穿 immutable 旧缓存；⑤ **形象清单 API 缓存**：`GET /api/characters` 由 `no-store` 改为 SWR（`max-age=60, s-maxage=600, stale-while-revalidate=86400`），首屏命中 CDN、不再每次等 Serverless 冷启动，前端 fetch 同步改 `cache: 'default'`。
 
 ## 后端 API
 
@@ -184,6 +185,10 @@ node tools/verify_interaction_queue.mjs                                # 交互�
 
 # 核心角色图 PNG → WebP（一次性首屏体积优化，需 uv + Pillow；转换后同步改 index.html / main.js 引用并重跑 npm run build）
 uv run --no-project --with Pillow scripts/convert-png-to-webp.py
+
+# 重压动画形象图集 *_atlas.webp（手机端切形象提速；先 dry-run 看各质量体积，再 --apply --quality 60 写入，原图备份为 *.orig.webp；重压后改 main.js 的 ATLAS_CACHE_BUSTER 击穿 immutable 旧缓存）
+uv run --no-project --with Pillow scripts/compress-atlas.py
+uv run --no-project --with Pillow scripts/compress-atlas.py --apply --quality 60
 
 # 把 audio-data.js（WAV）压成 audio-data.json（MP3），前端 fetch 异步加载（重建音频后重跑：先 build_audio_data.mjs 再本脚本）
 uv run --no-project --with numpy scripts/build-audio-data-json.py

@@ -112,7 +112,9 @@ function populateCharacters(list) {
 // 从后端拉取形象清单（后端扫描 Image 目录得出）。失败则回退内置兜底形象。
 async function loadCharactersFromServer() {
   try {
-    const res = await fetch('/api/characters', { cache: 'no-store' });
+    // 尊重服务端 Cache-Control：浏览器短缓存 + CDN 缓存，首屏不再每次走 serverless 冷启动。
+    // 自定义形象上传成功后由 registerCharacterEntry 即时更新内存，不依赖重新 fetch。
+    const res = await fetch('/api/characters', { cache: 'default' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const list = Array.isArray(data.characters) ? data.characters : [];
@@ -162,9 +164,13 @@ function restoreSelectedCharacter() {
   }
 }
 // 当前动画形象的精灵图 atlas 地址（帝皇由后端形象清单提供，兜底为内置帝皇图集）。
+// 附带全局版本号做缓存击穿：atlas 文件更新（如体积压缩）后，旧浏览器 / CDN 缓存会因
+// URL 变化重新拉取新文件，避免 vercel.json 里 Image/* 的 immutable 长缓存锁死旧版本。
+const ATLAS_CACHE_BUSTER = 'v=20260810-atlas60';
 function currentAnimationAtlasUrl() {
-  return CHARACTER_IMAGE_SETS[selectedCharacterId]?.atlas
+  const url = CHARACTER_IMAGE_SETS[selectedCharacterId]?.atlas
     || 'Image/donghaidihuang_atlas.webp';
+  return url + (url.includes('?') ? '&' : '?') + ATLAS_CACHE_BUSTER;
 }
 const HAJIMI_ANIMATION_BEATS = 9;
 const HAJIMI_FRAMES_PER_BEAT = 12;

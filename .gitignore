@@ -8,3 +8,6 @@ node_modules/
 /data/
 
 .vercel
+
+# atlas 压缩前的原图备份（仅本地回滚用，git history 已留原版）
+public/Image/*.orig.webp

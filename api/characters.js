@@ -30,13 +30,15 @@ function readBuiltin() {
   return [];
 }
 
-function sendJson(res, status, obj) {
+// cacheControl：GET 形象清单可被 CDN/浏览器短缓存（首屏加速）；
+// POST 上传与错误响应默认 no-store，避免被中间缓存误存。
+function sendJson(res, status, obj, cacheControl = 'no-store') {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
   // @vercel/node 给的 res 是原生 Node ServerResponse，没有 Express 的 res.status()；
   // 必须用 res.writeHead(status, headers) 设状态码与响应头（与 server.js 一致）。
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
+    'Cache-Control': cacheControl,
     'Content-Length': body.length,
   });
   res.end(body);
@@ -94,7 +96,14 @@ module.exports = async (req, res) => {
         }
       }
       custom.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-      sendJson(res, 200, { characters: [...builtin, ...custom] });
+      // 形象清单低频变更：浏览器 max-age=60s 缓存，CDN s-maxage=600s 缓存，
+      // 过期后允许返回旧值并后台刷新（SWR）。首屏通常命中 CDN，不再等 serverless 冷启动。
+      sendJson(
+        res,
+        200,
+        { characters: [...builtin, ...custom] },
+        'public, max-age=60, s-maxage=600, stale-while-revalidate=86400',
+      );
       return;
     }
 
