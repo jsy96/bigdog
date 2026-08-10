@@ -23,7 +23,7 @@
 - **演奏设置**：顶部有「钢琴」开关按钮和「八度」循环按钮（点击在 C3–C6 间切换，钢琴模式与起始八度保存在 `localStorage`）；强化节奏、显示网格固定开启、不可关闭。
 - **键盘控制**：钢琴模式下用键盘行（QWE…/ASD…/ZXC…）弹奏，方向键 ←/→ 切换八度。
 - 全屏几何特效（12 种）、节拍律动、张嘴动画、按键网格显示。
-- **版本标识**：界面右下角低调显示当前版本号 `v1.0.260810-atlas`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/index.html` 里 `.version-tag` 的文本）。
+- **版本标识**：界面右下角低调显示当前版本号 `v1.0.260810-test7`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/index.html` 里 `.version-tag` 的文本）。
 
 ## 目录结构
 
@@ -166,6 +166,7 @@ Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使�
 ## 技术要点
 
 - **音高变调**：用逐帧 YIN 检测每段原始语音的参考基频，再通过 Web Audio 的 `AudioBufferSourceNode.playbackRate` 把每个按键固定对准 **A 小调五声音阶（A–C–D–E–G）** 的某个音；同一按键在任何时间、任何背景下倍率完全一致。详见 `docs/audio-pitch-harmony.md`。
+- **iOS 音频启动**：`audio-data.json` 仍使用 iOS 友好的 m4a/AAC 包；`AudioContext` 只在首次手势内创建并立即 `resume()`。iOS WebKit 上音效样本改为串行 `decodeAudioData`，每个解码和 `resume()` 都带超时兜底；若 WebKit 偶发不回调，会显示可重试错误并清理旧 `AudioContext`，不会永久停在「狗叫加载中」。
 - **响度校准**：以 `da.wav` 的有效帧 RMS 为基准，为九段音频分别计算固定增益，叠加结果再经 `DynamicsCompressorNode` 防削波。
 - **形象加载**：前端启动时请求 `/api/characters`，由后端扫描 `Image/` 生成清单；后端不可用时回退到内置形象，方便直接打开页面做基础演奏。
 - **本地存储**：演奏设置通过一个本地适配器（`localToyAdapter`）以 `localStorage` 持久化，键名沿用历史命名；当前形象选择使用 `dagou-selected-character-v1`，自定义图片本身由后端保存在 `Image/`。

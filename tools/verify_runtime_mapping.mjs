@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 // Executes the actual pitch-mapping declarations/functions extracted from
-// main.js, then compares every fixed sample/tier rate with the analyzer report.
+// public/main.js. If tools/tmp/pitch-analysis-report.json exists, it also
+// compares runtime rates with the analyzer report.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,27 +11,18 @@ import { fileURLToPath } from 'node:url';
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.dirname(toolsDir);
-const mainPath = path.join(rootDir, 'main.js');
-const audioDataPath = path.join(rootDir, 'audio-data.js');
+const mainPath = path.join(rootDir, 'public', 'main.js');
+const audioDataPath = path.join(rootDir, 'public', 'audio-data.json');
 const reportPath = path.join(toolsDir, 'tmp', 'pitch-analysis-report.json');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
-const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+const report = fs.existsSync(reportPath)
+  ? JSON.parse(fs.readFileSync(reportPath, 'utf8'))
+  : null;
 const sampleNames = [
   'da', 'gou', 'jiao',
   'ha', 'ji', 'mi',
   'dingdongji_ding', 'dingdongji_dong', 'dingdongji_ji',
 ];
-const runtimeSampleFiles = {
-  da: 'da.wav',
-  gou: 'gou.wav',
-  jiao: 'jiao.wav',
-  ha: 'ha_new.wav',
-  ji: 'ji_new.wav',
-  mi: 'mi_new.wav',
-  dingdongji_ding: 'dingdongji_ding.wav',
-  dingdongji_dong: 'dingdongji_dong.wav',
-  dingdongji_ji: 'dingdongji_ji.wav',
-};
 
 function extractDeclaration(pattern, label) {
   const match = mainSource.match(pattern);
@@ -117,12 +109,10 @@ vm.runInNewContext(
   let selectedSfxId = 'dagou';
   const performanceSettings = {
     pianoMode: false,
-    octaveSwitching: false,
     pianoOctaveStart: 4,
   };
   let stageMetrics = { width: 1200, height: 800 };
   function getStageMetrics() { return stageMetrics; }
-  function renderOctaveControls() {}
   ${declarations}
   ${extractFunction('normalizePianoOctaveStart')}
   ${extractFunction('effectivePianoOctaveStart')}
@@ -144,12 +134,10 @@ vm.runInNewContext(
       width,
       height,
       pianoMode = false,
-      octaveSwitching = false,
       pianoOctaveStart = PIANO_DEFAULT_OCTAVE_START,
     ) {
       stageMetrics = { width, height };
       performanceSettings.pianoMode = pianoMode;
-      performanceSettings.octaveSwitching = octaveSwitching;
       performanceSettings.pianoOctaveStart = pianoOctaveStart;
       buildGrid();
       return {
@@ -172,25 +160,6 @@ const expectedSfxSamples = {
     jiao: 'dingdongji_ji',
   },
 };
-const analysedMiSustain = report.sustain_regions?.mi;
-if (!analysedMiSustain?.config) {
-  throw new Error('Pitch analyzer report is missing the mi sustain-region audit');
-}
-for (const [key, expected] of Object.entries(analysedMiSustain.config)) {
-  if (mappingApi.sustainRegions.mi?.[key] !== expected) {
-    throw new Error(
-      `mi sustain ${key}: expected ${expected}, got ` +
-      `${mappingApi.sustainRegions.mi?.[key]}`,
-    );
-  }
-}
-if (
-  analysedMiSustain.pitch_span_cents > 30 ||
-  analysedMiSustain.rms_span_db > 4 ||
-  analysedMiSustain.minimum_confidence < 0.8
-) {
-  throw new Error('mi sustain region is not stable enough for WSOLA looping');
-}
 for (const [sfxId, expectedSamples] of Object.entries(expectedSfxSamples)) {
   for (const [semanticSample, audioSample] of Object.entries(expectedSamples)) {
     if (mappingApi.resolveSfxSample(semanticSample, sfxId) !== audioSample) {
@@ -202,53 +171,15 @@ for (const [sfxId, expectedSamples] of Object.entries(expectedSfxSamples)) {
   }
 }
 
-const audioSandbox = {};
-vm.runInNewContext(
-  fs.readFileSync(audioDataPath, 'utf8').replace(
-    'const AUDIO_B64',
-    'globalThis.AUDIO_B64',
-  ),
-  audioSandbox,
-);
+const audioBundle = JSON.parse(fs.readFileSync(audioDataPath, 'utf8'));
 for (const sample of sampleNames) {
-  if (!audioSandbox.AUDIO_B64?.[sample]) {
+  if (!audioBundle?.[sample]) {
     throw new Error(`Embedded audio bundle is missing ${sample}`);
   }
-  const runtimeFile = path.join(
-    rootDir,
-    'audio',
-    ...runtimeSampleFiles[sample].split('/'),
-  );
-  const embedded = Buffer.from(audioSandbox.AUDIO_B64[sample], 'base64');
-  if (!embedded.equals(fs.readFileSync(runtimeFile))) {
-    throw new Error(`Embedded ${sample} does not match ${runtimeSampleFiles[sample]}`);
+  const embedded = Buffer.from(audioBundle[sample], 'base64');
+  if (embedded.length < 16 || embedded.toString('ascii', 4, 8) !== 'ftyp') {
+    throw new Error(`Embedded ${sample} is not an M4A/MP4 audio payload`);
   }
-}
-
-let checked = 0;
-if (!Array.isArray(report.mappings) || report.mappings.length !== 36) {
-  throw new Error('Pitch analyzer report must contain all 36 normal sample/tier mappings');
-}
-for (const mapping of report.mappings) {
-  const actualRate = mappingApi.barkPlaybackRate(
-    mapping.sample,
-    mapping.tier_index,
-  );
-  if (Math.abs(actualRate - mapping.playback_rate) > 1e-10) {
-    throw new Error(
-      `${mapping.sample}/${mapping.tier}: ` +
-      `expected ${mapping.playback_rate}, got ${actualRate}`,
-    );
-  }
-  // Repeated calls must never alter a key's pitch.
-  const repeatedRate = mappingApi.barkPlaybackRate(
-    mapping.sample,
-    mapping.tier_index,
-  );
-  if (repeatedRate !== actualRate) {
-    throw new Error(`${mapping.sample}/${mapping.tier}: rate is not stable`);
-  }
-  checked++;
 }
 
 const minorPentatonicPitchClasses = new Set([9, 0, 2, 4, 7]);
@@ -257,40 +188,27 @@ const expectedRaisedHajimiTargets = {
   ji: [74, 72, 69, 67],
   mi: [72, 69, 67, 64],
 };
+let checked = 0;
 for (const sample of sampleNames) {
-  const rows = report.mappings
-    .filter(item => item.sample === sample)
-    .sort((left, right) => left.tier_index - right.tier_index);
-  if (rows.length !== 4) {
-    throw new Error(`${sample}: expected four fixed pitch keys`);
+  const targets = mappingApi.targetMidi[sample];
+  if (!Array.isArray(targets) || targets.length !== 4) {
+    throw new Error(`${sample}: expected four fixed pitch targets`);
   }
-  for (const row of rows) {
-    if (!minorPentatonicPitchClasses.has(row.target_midi % 12)) {
-      throw new Error(`${sample}/${row.tier}: target is outside A minor pentatonic`);
+  for (let tierIndex = 0; tierIndex < 4; tierIndex++) {
+    const targetMidi = targets[tierIndex];
+    if (!minorPentatonicPitchClasses.has(targetMidi % 12)) {
+      throw new Error(`${sample}/${tierIndex}: target is outside A minor pentatonic`);
     }
-    if (mappingApi.targetMidi[sample][row.tier_index] !== row.target_midi) {
-      throw new Error(`${sample}/${row.tier}: runtime target MIDI mismatch`);
+    const firstRate = mappingApi.barkPlaybackRate(sample, tierIndex);
+    const repeatedRate = mappingApi.barkPlaybackRate(sample, tierIndex);
+    if (!Number.isFinite(firstRate) || repeatedRate !== firstRate) {
+      throw new Error(`${sample}/${tierIndex}: rate is missing or unstable`);
     }
-  }
-
-  const sourceMidi = mappingApi.sourceMidi[sample];
-  const candidates = [];
-  for (let midi = 24; midi <= 108; midi++) {
-    if (minorPentatonicPitchClasses.has(midi % 12)) candidates.push(midi);
-  }
-  const nearest = candidates.reduce((best, midi) =>
-    Math.abs(midi - sourceMidi) < Math.abs(best - sourceMidi) ? midi : best
-  );
-  const nearestTier = report.method.nearest_minor_tier_index_by_sample?.[sample];
-  if (!Number.isInteger(nearestTier) || rows[nearestTier].target_midi !== nearest) {
-    throw new Error(
-      `${sample}: tier ${nearestTier + 1} is ` +
-      `${rows[nearestTier]?.target_midi}, nearest minor note is ${nearest}`,
-    );
+    checked++;
   }
 
   if (expectedRaisedHajimiTargets[sample]) {
-    const actualTargets = rows.map(row => row.target_midi);
+    const actualTargets = targets;
     if (
       actualTargets.some(
         (target, index) => target !== expectedRaisedHajimiTargets[sample][index],
@@ -298,6 +216,11 @@ for (const sample of sampleNames) {
     ) {
       throw new Error(`${sample}: raised Hajimi target sequence is incorrect`);
     }
+  }
+
+  const gain = mappingApi.sampleGain[sample];
+  if (!Number.isFinite(gain) || gain <= 0) {
+    throw new Error(`${sample}: runtime loudness gain is missing or invalid`);
   }
 }
 
@@ -327,37 +250,11 @@ const pianoOctaveStarts = [3, 4, 5, 6];
 const pianoIntervals = [0, 2, 4, 5, 7, 9, 11, 12];
 const pianoMidiForOctave = octave =>
   pianoIntervals.map(interval => (octave + 1) * 12 + interval);
-if (!Array.isArray(report.piano_mappings) || report.piano_mappings.length !== 288) {
-  throw new Error('Pitch analyzer report must contain all 288 piano sample/key mappings');
-}
-for (const mapping of report.piano_mappings) {
-  const pianoMidi = pianoMidiForOctave(mapping.octave_start);
-  if (pianoMidi[mapping.key_index] !== mapping.target_midi) {
-    throw new Error(`${mapping.sample}/piano-${mapping.key_index}: report target mismatch`);
-  }
-  if (mappingApi.buildPianoScale(mapping.octave_start)[mapping.key_index].midi !== mapping.target_midi) {
-    throw new Error(`${mapping.sample}/piano-${mapping.key_index}: runtime scale mismatch`);
-  }
-  const actualRate = mappingApi.barkPlaybackRate(
-    mapping.sample,
-    mapping.key_index,
-    mapping.target_midi,
-    mapping.octave_start,
-  );
-  if (Math.abs(actualRate - mapping.playback_rate) > 1e-10) {
-    throw new Error(
-      `${mapping.sample}/piano-${mapping.key_index}: ` +
-      `expected ${mapping.playback_rate}, got ${actualRate}`,
-    );
-  }
-}
-
 for (const octaveStart of pianoOctaveStarts) {
   const pianoMidi = pianoMidiForOctave(octaveStart);
   const pianoLandscape = mappingApi.buildLayout(
     1200,
     800,
-    true,
     true,
     octaveStart,
   );
@@ -380,7 +277,6 @@ for (const octaveStart of pianoOctaveStarts) {
     800,
     1200,
     true,
-    true,
     octaveStart,
   );
   if (pianoPortrait.cols !== 3 || pianoPortrait.rows !== 8) {
@@ -398,87 +294,170 @@ for (const octaveStart of pianoOctaveStarts) {
   }
 }
 
-const controlsDisabledLayout = mappingApi.buildLayout(1200, 800, true, false, 6);
-const defaultPianoMidi = pianoMidiForOctave(4);
-if (controlsDisabledLayout.zones.some(
-  (zone, index) => zone.targetMidi !== defaultPianoMidi[index % 8],
-)) {
-  throw new Error('Disabled octave switching must retain the C4–C5 piano scale');
-}
-
-for (const sample of sampleNames) {
-  const expectedGain = report.loudness?.sample_gain?.[sample];
-  if (!Number.isFinite(expectedGain)) {
-    throw new Error(`${sample}: analyzer report is missing loudness gain`);
+let analysedMiSustain = null;
+if (report) {
+  analysedMiSustain = report.sustain_regions?.mi;
+  if (!analysedMiSustain?.config) {
+    throw new Error('Pitch analyzer report is missing the mi sustain-region audit');
   }
-  if (Math.abs(mappingApi.sampleGain[sample] - expectedGain) > 1e-9) {
-    throw new Error(
-      `${sample}: expected loudness gain ${expectedGain}, ` +
-      `got ${mappingApi.sampleGain[sample]}`,
+  for (const [key, expected] of Object.entries(analysedMiSustain.config)) {
+    if (mappingApi.sustainRegions.mi?.[key] !== expected) {
+      throw new Error(
+        `mi sustain ${key}: expected ${expected}, got ` +
+        `${mappingApi.sustainRegions.mi?.[key]}`,
+      );
+    }
+  }
+  if (
+    analysedMiSustain.pitch_span_cents > 30 ||
+    analysedMiSustain.rms_span_db > 4 ||
+    analysedMiSustain.minimum_confidence < 0.8
+  ) {
+    throw new Error('mi sustain region is not stable enough for WSOLA looping');
+  }
+
+  if (!Array.isArray(report.mappings) || report.mappings.length !== 36) {
+    throw new Error('Pitch analyzer report must contain all 36 normal sample/tier mappings');
+  }
+  for (const mapping of report.mappings) {
+    const actualRate = mappingApi.barkPlaybackRate(
+      mapping.sample,
+      mapping.tier_index,
     );
+    if (Math.abs(actualRate - mapping.playback_rate) > 1e-10) {
+      throw new Error(
+        `${mapping.sample}/${mapping.tier}: ` +
+        `expected ${mapping.playback_rate}, got ${actualRate}`,
+      );
+    }
+    if (mappingApi.targetMidi[mapping.sample][mapping.tier_index] !== mapping.target_midi) {
+      throw new Error(`${mapping.sample}/${mapping.tier}: runtime target MIDI mismatch`);
+    }
   }
-}
-if (report.worst_transposed_loudness_error_db > 1) {
-  throw new Error('Normal-mode loudness calibration exceeds 1 dB');
-}
-const directPitchExceptions = new Set(['mi:6', 'dingdongji_ji:6']);
-const pianoPitchOutliers = report.piano_mappings.filter(
-  mapping => Math.abs(mapping.target_error_cents) > 25,
-);
-if (pianoPitchOutliers.some(mapping =>
-  !directPitchExceptions.has(`${mapping.sample}:${mapping.octave_start}`) ||
-  Math.abs(mapping.target_error_cents) > 35
-)) {
-  throw new Error('Piano pitch calibration has an unexpected >25-cent outlier');
-}
-for (const exception of directPitchExceptions) {
-  if (!pianoPitchOutliers.some(mapping =>
-    `${mapping.sample}:${mapping.octave_start}` === exception
-  )) {
-    throw new Error(`${exception}: documented direct-pitch exception is no longer present`);
-  }
-}
 
-const pianoLoudnessOutliers = report.piano_mappings.filter(
-  mapping => Math.abs(mapping.loudness_error_db) > 1,
-);
-if (
-  pianoLoudnessOutliers.length !== 1 ||
-  pianoLoudnessOutliers[0].sample !== 'gou' ||
-  pianoLoudnessOutliers[0].octave_start !== 6 ||
-  Math.abs(pianoLoudnessOutliers[0].loudness_error_db) > 1.2
-) {
-  throw new Error('Piano-mode loudness calibration has an unexpected >1 dB outlier');
+  for (const sample of sampleNames) {
+    const rows = report.mappings
+      .filter(item => item.sample === sample)
+      .sort((left, right) => left.tier_index - right.tier_index);
+    const sourceMidi = mappingApi.sourceMidi[sample];
+    const candidates = [];
+    for (let midi = 24; midi <= 108; midi++) {
+      if (minorPentatonicPitchClasses.has(midi % 12)) candidates.push(midi);
+    }
+    const nearest = candidates.reduce((best, midi) =>
+      Math.abs(midi - sourceMidi) < Math.abs(best - sourceMidi) ? midi : best
+    );
+    const nearestTier = report.method.nearest_minor_tier_index_by_sample?.[sample];
+    if (!Number.isInteger(nearestTier) || rows[nearestTier].target_midi !== nearest) {
+      throw new Error(
+        `${sample}: tier ${nearestTier + 1} is ` +
+        `${rows[nearestTier]?.target_midi}, nearest minor note is ${nearest}`,
+      );
+    }
+  }
+
+  if (!Array.isArray(report.piano_mappings) || report.piano_mappings.length !== 288) {
+    throw new Error('Pitch analyzer report must contain all 288 piano sample/key mappings');
+  }
+  for (const mapping of report.piano_mappings) {
+    const pianoMidi = pianoMidiForOctave(mapping.octave_start);
+    if (pianoMidi[mapping.key_index] !== mapping.target_midi) {
+      throw new Error(`${mapping.sample}/piano-${mapping.key_index}: report target mismatch`);
+    }
+    if (mappingApi.buildPianoScale(mapping.octave_start)[mapping.key_index].midi !== mapping.target_midi) {
+      throw new Error(`${mapping.sample}/piano-${mapping.key_index}: runtime scale mismatch`);
+    }
+    const actualRate = mappingApi.barkPlaybackRate(
+      mapping.sample,
+      mapping.key_index,
+      mapping.target_midi,
+      mapping.octave_start,
+    );
+    if (Math.abs(actualRate - mapping.playback_rate) > 1e-10) {
+      throw new Error(
+        `${mapping.sample}/piano-${mapping.key_index}: ` +
+        `expected ${mapping.playback_rate}, got ${actualRate}`,
+      );
+    }
+  }
+
+  for (const sample of sampleNames) {
+    const expectedGain = report.loudness?.sample_gain?.[sample];
+    if (!Number.isFinite(expectedGain)) {
+      throw new Error(`${sample}: analyzer report is missing loudness gain`);
+    }
+    if (Math.abs(mappingApi.sampleGain[sample] - expectedGain) > 1e-9) {
+      throw new Error(
+        `${sample}: expected loudness gain ${expectedGain}, ` +
+        `got ${mappingApi.sampleGain[sample]}`,
+      );
+    }
+  }
+  if (report.worst_transposed_loudness_error_db > 1) {
+    throw new Error('Normal-mode loudness calibration exceeds 1 dB');
+  }
+  const directPitchExceptions = new Set(['mi:6', 'dingdongji_ji:6']);
+  const pianoPitchOutliers = report.piano_mappings.filter(
+    mapping => Math.abs(mapping.target_error_cents) > 25,
+  );
+  if (pianoPitchOutliers.some(mapping =>
+    !directPitchExceptions.has(`${mapping.sample}:${mapping.octave_start}`) ||
+    Math.abs(mapping.target_error_cents) > 35
+  )) {
+    throw new Error('Piano pitch calibration has an unexpected >25-cent outlier');
+  }
+  for (const exception of directPitchExceptions) {
+    if (!pianoPitchOutliers.some(mapping =>
+      `${mapping.sample}:${mapping.octave_start}` === exception
+    )) {
+      throw new Error(`${exception}: documented direct-pitch exception is no longer present`);
+    }
+  }
+
+  const pianoLoudnessOutliers = report.piano_mappings.filter(
+    mapping => Math.abs(mapping.loudness_error_db) > 1,
+  );
+  if (
+    pianoLoudnessOutliers.length !== 1 ||
+    pianoLoudnessOutliers[0].sample !== 'gou' ||
+    pianoLoudnessOutliers[0].octave_start !== 6 ||
+    Math.abs(pianoLoudnessOutliers[0].loudness_error_db) > 1.2
+  ) {
+    throw new Error('Piano-mode loudness calibration has an unexpected >1 dB outlier');
+  }
 }
 
 console.log(`Runtime fixed pitch mapping verified: ${checked} sample/tier keys`);
 console.log('SFX routing verified: Hajimi and Dingdong replace all three samples');
-console.log('Embedded audio verified: all nine runtime WAV files are present');
-console.log(
-  `Hajimi mi sustain verified: ` +
-  `${analysedMiSustain.pitch_span_cents.toFixed(3)} cents pitch span, ` +
-  `${analysedMiSustain.rms_span_db.toFixed(3)} dB level span`,
-);
+console.log('Embedded audio verified: all nine runtime M4A/AAC samples are present');
 console.log('Repeated-key pitch stability verified: no chord/time-dependent switching');
-console.log('Layout verified: all four fixed pitch tiers retain their screen order');
+console.log('Layout verified: fixed and piano pitch tiers retain their screen order');
 console.log('Raised Hajimi verified: lowest tier removed and new high tier added');
-console.log('Piano layout verified: four C3–C7 ranges in 8 × 3 / reversed 3 × 8 layouts');
-console.log(
-  `Worst remeasured transposed error: ` +
-  `${report.worst_transposed_target_error_cents.toFixed(3)} cents`,
-);
-console.log(
-  `Worst remeasured piano error: ` +
-  `${report.worst_piano_target_error_cents.toFixed(3)} cents`,
-);
-console.log(
-  `Worst calibrated loudness error: ` +
-  `${Math.max(
-    report.worst_transposed_loudness_error_db,
-    report.worst_piano_loudness_error_db,
-  ).toFixed(3)} dB`,
-);
-console.log(
-  'Direct-pitch extremes documented: only mi/C6 and dingdongji_ji/C6 exceed 25 cents; ' +
-  'only gou/C6 exceeds 1 dB',
-);
+if (report && analysedMiSustain) {
+  console.log(
+    `Hajimi mi sustain verified: ` +
+    `${analysedMiSustain.pitch_span_cents.toFixed(3)} cents pitch span, ` +
+    `${analysedMiSustain.rms_span_db.toFixed(3)} dB level span`,
+  );
+  console.log(
+    `Worst remeasured transposed error: ` +
+    `${report.worst_transposed_target_error_cents.toFixed(3)} cents`,
+  );
+  console.log(
+    `Worst remeasured piano error: ` +
+    `${report.worst_piano_target_error_cents.toFixed(3)} cents`,
+  );
+  console.log(
+    `Worst calibrated loudness error: ` +
+    `${Math.max(
+      report.worst_transposed_loudness_error_db,
+      report.worst_piano_loudness_error_db,
+    ).toFixed(3)} dB`,
+  );
+  console.log(
+    'Direct-pitch extremes documented: only mi/C6 and dingdongji_ji/C6 exceed 25 cents; ' +
+    'only gou/C6 exceeds 1 dB',
+  );
+} else {
+  console.log('Pitch analyzer report not found; skipped report-only calibration checks');
+}

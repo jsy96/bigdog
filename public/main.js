@@ -1478,31 +1478,117 @@ function ensureAudioB64() {
   return audioB64Promise;
 }
 
-// iOS Safari 的 decodeAudioData Promise 形式对部分格式（如 WAV）不稳定——可能
-// 既不 resolve 也不 reject，await 永久挂起、卡在「狗叫加载中」。回调形式是该 API
-// 的原始契约、兼容性最好，手动包成 Promise 规避（mp3 走 Promise 形式正常，仅 WAV 触发）。
-function decodeAudioDataCompat(ctx, arrayBuffer) {
+function waitWithTimeout(promise, timeoutMs, label) {
+  let timer = 0;
   return new Promise((resolve, reject) => {
-    ctx.decodeAudioData(arrayBuffer, resolve, reject);
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
   });
 }
 
+function isLikelyIOSWebKit() {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const touchPoints = navigator.maxTouchPoints || 0;
+  return (
+    /iP(?:hone|ad|od)/.test(platform) ||
+    (/MacIntel/.test(platform) && touchPoints > 1) ||
+    (/iP(?:hone|ad|od)/.test(ua))
+  ) && /WebKit/i.test(ua);
+}
+
+// iOS Safari 的 decodeAudioData Promise 形式对部分格式不稳定；并行解码多个
+// AAC/M4A 片段也可能让其中一个回调永久不返回，导致卡在「狗叫加载中」。回调形式
+// 加硬超时后，至少能失败重试；iOS 再配合串行解码，避免 WebKit 并发解码队列卡死。
+function decodeAudioDataCompat(ctx, arrayBuffer, label) {
+  return waitWithTimeout(
+    new Promise((resolve, reject) => {
+      let settled = false;
+      const done = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      try {
+        ctx.decodeAudioData(arrayBuffer, done, fail);
+      } catch (error) {
+        fail(error);
+      }
+    }),
+    8000,
+    `decodeAudioData(${label})`,
+  );
+}
+
+function decodeSampleFromB64(name, encoded) {
+  if (typeof encoded !== 'string' || encoded.length === 0) {
+    throw new Error(`Missing embedded audio sample: ${name}`);
+  }
+  // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换。
+  return decodeAudioDataCompat(ctx, b64ToArrayBuffer(encoded), name).then((buf) => {
+    buffers[name] = buf;
+  });
+}
+
+function clearDecodedSamples() {
+  for (const key of Object.keys(buffers)) delete buffers[key];
+  for (const key of Object.keys(sustainLoops)) delete sustainLoops[key];
+  sustainTexturesBuilding = false;
+}
+
+async function resumeAudioContext(label = 'AudioContext.resume') {
+  if (!ctx || ctx.state !== 'suspended') return;
+  await waitWithTimeout(ctx.resume(), 1800, label);
+}
+
+async function closeAudioContextQuietly() {
+  if (!ctx) return;
+  const oldCtx = ctx;
+  ctx = null;
+  master = null;
+  bgmBus = null;
+  sfxBus = null;
+  noiseBuf = null;
+  try {
+    if (oldCtx.state !== 'closed') {
+      await waitWithTimeout(oldCtx.close(), 1200, 'AudioContext.close');
+    }
+  } catch (_) {
+    // iOS 有时在失败的解码队列后 close 也会拒绝或挂起；下次点击重新创建即可。
+  }
+}
+
 // 并行解码全部音效样本（在 start() 用户手势内创建的 ctx 上执行）。
-// decodeAudioData 在音频线程、本可并发；Promise.all 并行后只等最慢的一个，
-// 比 for...of + await 串行解码（9 个样本耗时累加）显著更快。
+// 桌面 / Android 继续并行，iOS WebKit 串行，规避移动 Safari 偶发永不回调。
 async function loadSamples() {
   const AUDIO_B64 = await ensureAudioB64();
-  const tasks = RUNTIME_SAMPLE_NAMES.map((n) => {
-    const encoded = AUDIO_B64[n];
-    if (typeof encoded !== 'string' || encoded.length === 0) {
-      throw new Error(`Missing embedded audio sample: ${n}`);
+  if (isLikelyIOSWebKit()) {
+    for (const name of RUNTIME_SAMPLE_NAMES) {
+      await decodeSampleFromB64(name, AUDIO_B64[name]);
     }
-    // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换。
-    return decodeAudioDataCompat(ctx, b64ToArrayBuffer(encoded)).then((buf) => {
-      buffers[n] = buf;
-    });
-  });
-  await Promise.all(tasks);
+    return;
+  }
+
+  await Promise.all(
+    RUNTIME_SAMPLE_NAMES.map((name) => decodeSampleFromB64(name, AUDIO_B64[name])),
+  );
 }
 
 // 延音纹理（WSOLA）构建是 CPU 密集的同步操作，每条纹理要合成 ~12 秒波形。
@@ -3321,7 +3407,12 @@ function endPointer(e, musical) {
 window.addEventListener('pointerup', (e) => endPointer(e, true));
 window.addEventListener('pointercancel', (e) => endPointer(e, false));
 
+function keyboardInputBlocked() {
+  return ccmModal.classList.contains('is-open');
+}
+
 function handlePianoKeyDown(event) {
+  if (keyboardInputBlocked()) return;
   if (
     event.repeat ||
     event.ctrlKey ||
@@ -3384,10 +3475,11 @@ async function start() {
     // 正式 AudioContext 必须在用户手势内创建（iOS 严格要求，否则即使 resume 也静音）。
     initAudio();
     // resume 必须在用户手势的同步调用段内触发（iOS 严格要求），先于任何 await。
-    const resumePromise = ctx.state === 'suspended' ? ctx.resume() : null;
-    // 并行解码样本（decodeAudioDataCompat 回调形式，规避 iOS 对 WAV Promise 形式的不稳定）。
+    // 先立刻发起 promise，再等待样本解码；若 iOS 挂起也有超时兜底，不会永久加载。
+    const resumePromise = resumeAudioContext('AudioContext.resume');
+    // 并行/串行解码样本：iOS WebKit 串行，其他浏览器并行。
     await loadSamples();
-    if (resumePromise) await resumePromise;
+    await resumePromise;
 
     startTime = ctx.currentTime + 0.12;
     nextNoteTime = startTime;
@@ -3403,6 +3495,8 @@ async function start() {
     // 解码失败（或 iOS 对该格式不兼容）时给出可见错误，而不是静默卡在加载界面。
     console.error('[大狗Tap] 音频加载失败', err);
     showToyNotice('音频加载失败，点屏幕重试：' + (err && err.message ? err.message : err), true);
+    clearDecodedSamples();
+    await closeAudioContextQuietly();
     started = false; // 允许再次点击重试
   }
 }

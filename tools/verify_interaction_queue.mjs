@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.dirname(toolsDir);
-const mainSource = fs.readFileSync(path.join(rootDir, 'main.js'), 'utf8');
-const htmlSource = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+const mainSource = fs.readFileSync(path.join(rootDir, 'public', 'main.js'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(rootDir, 'public', 'index.html'), 'utf8');
 
 function extractFunction(name) {
   const start = mainSource.indexOf(`function ${name}(`);
@@ -73,13 +73,23 @@ assert.match(
 );
 assert.match(
   htmlSource,
-  /#octave-controls\s*\{[\s\S]*?z-index:\s*12;/,
-  'octave controls must stay above the startup overlay while remaining below top controls',
+  /#top-controls\s*\{[\s\S]*?z-index:\s*20;/,
+  'top controls must stay above the startup overlay',
+);
+assert.match(
+  htmlSource,
+  /#overlay\s*\{[\s\S]*?z-index:\s*10;/,
+  'startup overlay must remain below top controls',
+);
+assert.match(
+  htmlSource,
+  /<button id="octave-toggle"[\s\S]*?class="control-button[^"]*"[\s\S]*?disabled>/,
+  'octave toggle must remain in the top control bar and start disabled',
 );
 assert.match(
   mainSource,
-  /button\.addEventListener\('pointerdown', event => event\.stopPropagation\(\)\)/,
-  'octave controls must not leak pointerdown into the stage startup/input handler',
+  /button\.addEventListener\('pointerdown', \(event\) => event\.stopPropagation\(\)\)/,
+  'top control buttons must not leak pointerdown into the stage startup/input handler',
 );
 assert.match(
   extractFunction('handlePianoKeyUp'),
@@ -204,18 +214,22 @@ vm.runInNewContext(
   };
   const pointers = new Map();
   let settingsOpen = false;
-  let unlockConfirmOpen = false;
+  const ccmModal = {
+    classList: { contains: (name) => name === 'is-open' && settingsOpen },
+  };
+
   let started = true;
   const buffers = { da: {} };
   const calls = [];
   ${pianoKeyboardDeclarations}
   ${extractFunction('pianoKeyboardBinding')}
   ${extractFunction('pianoZoneIndexForCode')}
+  ${extractFunction('keyboardInputBlocked')}
   function createInputState() { return {}; }
   function hideControlsUntilIdle() {}
   function start() { calls.push({ kind: 'start' }); }
   function octaveControlsEnabled() {
-    return performanceSettings.pianoMode && performanceSettings.octaveSwitching;
+    return performanceSettings.pianoMode;
   }
   function shiftPianoOctave(direction) {
     calls.push({ kind: 'octave', direction });
@@ -318,11 +332,11 @@ assert.deepEqual(
 keyboardApi.keyDown(keyboardEvent('ArrowRight', { repeat: true }));
 keyboardApi.keyDown(keyboardEvent('ArrowLeft', { ctrlKey: true }));
 assert.equal(keyboardApi.calls.length, 2, 'repeat and modified arrows must be ignored');
-keyboardApi.setOctaveSwitching(false);
+keyboardApi.setPianoMode(false);
 const disabledArrow = keyboardEvent('ArrowRight');
 keyboardApi.keyDown(disabledArrow);
 assert.equal(disabledArrow.defaultPrevented, undefined);
-keyboardApi.setOctaveSwitching(true);
+keyboardApi.setPianoMode(true);
 keyboardApi.setSettingsOpen(true);
 keyboardApi.keyDown(keyboardEvent('ArrowRight'));
 assert.equal(keyboardApi.calls.length, 2, 'settings dialogs must block octave arrows');
@@ -390,6 +404,7 @@ vm.runInNewContext(
   }
   function renderToyCloudState() {}
   function renderOctaveControls() {}
+  function updateOctaveButton() {}
   function queuePianoOctaveCloudWrite(octave) { queued.push(octave); }
   ${extractFunction('normalizePianoOctaveStart')}
   ${extractFunction('octaveControlsEnabled')}
@@ -397,7 +412,7 @@ vm.runInNewContext(
   globalThis.octaveApi = {
     shift: shiftPianoOctave,
     current: () => performanceSettings.pianoOctaveStart,
-    setEnabled(enabled) { performanceSettings.octaveSwitching = enabled; },
+    setEnabled(enabled) { performanceSettings.pianoMode = enabled; },
     applied,
     queued,
   };
