@@ -1478,18 +1478,44 @@ function ensureAudioB64() {
   return audioB64Promise;
 }
 
+// 并行解码全部音效样本。decodeAudioData 在音频线程执行、本可并发，
+// 旧实现用 for...of + await 串行解码，9 个样本的解码时间被累加；
+// 并行后只等最慢的一个，手机端启动等待显著缩短。
 async function loadSamples() {
   const AUDIO_B64 = await ensureAudioB64();
-  for (const n of RUNTIME_SAMPLE_NAMES) {
+  const tasks = RUNTIME_SAMPLE_NAMES.map((n) => {
     const encoded = AUDIO_B64[n];
     if (typeof encoded !== 'string' || encoded.length === 0) {
       throw new Error(`Missing embedded audio sample: ${n}`);
     }
-    buffers[n] = await ctx.decodeAudioData(b64ToArrayBuffer(encoded));
-    sustainLoops[n] = SUSTAIN_REGIONS[n]?.enabled
-      ? buildSustainTexture(buffers[n], SUSTAIN_REGIONS[n])
-      : null;
-  }
+    // decodeAudioData 会 detach 传入的 ArrayBuffer，每个样本必须独立转换，
+    // 不能先批量转换再并行解码。
+    return ctx.decodeAudioData(b64ToArrayBuffer(encoded)).then((buf) => {
+      buffers[n] = buf;
+    });
+  });
+  await Promise.all(tasks);
+}
+
+// 延音纹理（WSOLA）构建是 CPU 密集的同步操作，每条纹理要合成 ~12 秒波形。
+// 不放入启动关键路径：start() 解码完即隐藏遮罩，纹理在后台分片构建，
+// 每构建一条让出一帧主线程，避免连续阻塞影响首屏交互。
+// 构建未完成时 playPressVoice 走 !sustain 降级路径播放原音，不会报错。
+let sustainTexturesBuilding = false;
+function buildSustainTexturesAsync() {
+  if (sustainTexturesBuilding) return;
+  sustainTexturesBuilding = true;
+  const names = RUNTIME_SAMPLE_NAMES.filter((n) => SUSTAIN_REGIONS[n]?.enabled);
+  let i = 0;
+  const tick = () => {
+    if (i >= names.length) return;
+    const n = names[i++];
+    if (buffers[n] && !sustainLoops[n]) {
+      sustainLoops[n] = buildSustainTexture(buffers[n], SUSTAIN_REGIONS[n]);
+    }
+    setTimeout(tick, 0);
+  };
+  setTimeout(tick, 0);
 }
 
 function monoMix(source) {
@@ -3358,6 +3384,8 @@ async function start() {
   setInterval(scheduler, 25);
 
   overlay.classList.add('hide');
+  // 延音纹理在遮罩隐藏后后台构建，不阻塞首屏进入（见 buildSustainTexturesAsync）。
+  buildSustainTexturesAsync();
 }
 
 let resizeTimer = 0;
