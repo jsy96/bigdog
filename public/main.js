@@ -3372,9 +3372,13 @@ async function start() {
   hideControlsUntilIdle();
   subEl.textContent = '狗 叫 加 载 中 …';
 
-  initAudio();
-  if (ctx.state === 'suspended') await ctx.resume();
-  await loadSamples();
+  // ctx 已在页面加载时由 initAudio 创建（suspended）。resume 必须在用户手势的
+  // 同步调用段内触发（iOS 严格要求），因此先于任何 await 调用 resume()，
+  // 其 promise 与预解码 promise 一并等待。
+  const resumePromise = ctx.state === 'suspended' ? ctx.resume() : null;
+  // 样本预解码在页面加载时即开始（见文件末尾），点击时通常早已就绪。
+  await samplesReadyPromise;
+  if (resumePromise) await resumePromise;
 
   startTime = ctx.currentTime + 0.12;
   nextNoteTime = startTime;
@@ -3400,8 +3404,12 @@ if (window.ResizeObserver) {
   stageResizeObserver.observe(stage);
 }
 
-// 页面加载即 prefetch 音频 base64 包（audio-data.json），用户点击开始时通常已就绪。
-ensureAudioB64();
+// 页面加载即创建 AudioContext（suspended）并启动样本预解码。
+// decodeAudioData 不依赖 context 运行状态、无需用户手势，在后台线程完成；
+// iOS Safari 解码 mp3 较慢且常被串行化，提前到用户点击之前能让点击时几乎零等待。
+// ctx.resume() 仍留在 start() 的用户手势同步段内（iOS 严格要求）。
+initAudio();
+const samplesReadyPromise = loadSamples();
 
 buildGrid();
 fxResize();
