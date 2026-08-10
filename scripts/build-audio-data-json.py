@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
-"""从 public/audio-data.js（WAV base64 源）生成 public/audio-data.json（WAV base64）。
+"""从 public/audio-data.js（WAV base64 源）生成 public/audio-data.json（m4a/AAC base64）。
 
-用 ffmpeg 把每段源 WAV 标准化为 mono / 32kHz / 16bit PCM WAV，直接 base64 写入。
-浏览器 decodeAudioData 对未压缩 WAV 近乎零成本（基本是内存映射），避开 mp3 解压
-（霍夫曼 + IMDCT）在 iOS Safari 上 1~2 秒的解码耗时——iOS 冻结非手势 Web Audio
-context，解码无法提前到点击之前，只能在 start() 手势后进行，故解码本身越快越好。
-详见 memory: ios-webaudio-gesture-rule。
+iOS Safari 对 Web Audio 的限制很严：非手势创建的 AudioContext/OfflineAudioContext
+会被冻结，不能在点击前预解码；同时 Safari 对 WAV 的 decodeAudioData 兼容性不稳定。
+因此本项目把音频包生成为 iOS 原生更友好的 m4a/AAC（AAC-LC in MP4/M4A 容器），
+在 start() 用户手势内并行 decodeAudioData，兼顾 iOS 可用性、速度和包体积。
 
-代价：数据包体积约为 mp3 版的 5 倍（~260KB vs 50KB），但 iOS 省 1~2 秒解码，配合
-main.js 的并行 decodeAudioData，移动端点击后近即时出声。main.js 无需改动
-（decodeAudioData 对 WAV 与 MP3 同样工作）。
+输出格式：mono / 32kHz / AAC-LC / 96kbps / .m4a 容器。
+main.js 无需区分格式：decodeAudioData 会根据 ArrayBuffer 头部解码。
 
-同时用 YIN 对比「源 WAV」与「标准化 WAV」的基频，确认重采样未改变音高
+同时用 YIN 对比「源 WAV」与「m4a/AAC 往返解码后」的基频，确认有损编码未改变音高
 （项目靠 playbackRate 对齐 A 小调五声音阶，相邻半音 = 6%，故偏差 < 0.5% 即安全）。
 
 运行：uv run --no-project --with numpy scripts/build-audio-data-json.py
@@ -21,6 +19,7 @@ import base64
 import json
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -29,7 +28,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "public" / "audio-data.js"
 OUT = ROOT / "public" / "audio-data.json"
 
-AR = 32000   # 输出采样率（与历史 mp3 方案一致，控制体积；mono 16bit = 64KB/s）
+AR = 32000   # 输出采样率（控制体积；足够覆盖狗叫/拟声音效）
+BR = "96k"   # AAC-LC 码率（短音效保守取 96kbps，避免嘴音/辅音被压糊）
 
 
 def run_ffmpeg(input_bytes, *args):
@@ -41,15 +41,35 @@ def run_ffmpeg(input_bytes, *args):
     return proc.stdout
 
 
-def normalize_wav(wav_bytes):
-    """源 WAV -> mono / 32kHz / 16bit PCM WAV（无损、decodeAudioData 零成本）。"""
-    return run_ffmpeg(
-        wav_bytes, "-ac", "1", "-ar", str(AR), "-c:a", "pcm_s16le", "-f", "wav"
-    )
+def wav_to_m4a(wav_bytes):
+    """源 WAV -> mono / 32kHz / AAC-LC / m4a。
+
+    MP4/M4A muxer 需要可 seek 的输出，不能可靠写 stdout；用临时文件生成。
+    """
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        src = tmp / "in.wav"
+        out = tmp / "out.m4a"
+        src.write_bytes(wav_bytes)
+        subprocess.run(
+            [
+                "ffmpeg", "-loglevel", "error", "-y",
+                "-i", str(src),
+                "-ac", "1",
+                "-ar", str(AR),
+                "-c:a", "aac",
+                "-profile:a", "aac_low",
+                "-b:a", BR,
+                "-movflags", "+faststart",
+                str(out),
+            ],
+            check=True,
+        )
+        return out.read_bytes()
 
 
 def decode_mono_f32(audio_bytes):
-    """任意音频 → mono float32 PCM（统一交给 ffmpeg 解码，规避非标准 WAV 头）。"""
+    """任意音频 → mono float32 PCM（统一交给 ffmpeg 解码，规避容器差异）。"""
     return np.frombuffer(
         run_ffmpeg(audio_bytes, "-ac", "1", "-ar", str(AR), "-f", "f32le"),
         dtype=np.float32,
@@ -127,29 +147,29 @@ def main():
 
     out = {}
     total_in = total_out = 0
-    print(f"{'key':<18}{'源WAV':>9}{'PCM WAV':>9}{'比':>6}   基频 源->标准化 (偏差)")
+    print(f"{'key':<18}{'源WAV':>9}{'M4A':>9}{'比':>6}   基频 源->M4A (偏差)")
     print("-" * 64)
     for k, b64 in pairs.items():
         src_wav = base64.b64decode(b64)
-        pcm_wav = normalize_wav(src_wav)
-        out[k] = base64.b64encode(pcm_wav).decode()
+        m4a = wav_to_m4a(src_wav)
+        out[k] = base64.b64encode(m4a).decode()
         total_in += len(src_wav)
-        total_out += len(pcm_wav)
+        total_out += len(m4a)
 
         p_in = detect_pitch(decode_mono_f32(src_wav), AR)
-        p_out = detect_pitch(decode_mono_f32(pcm_wav), AR)
+        p_out = detect_pitch(decode_mono_f32(m4a), AR)
         if p_in and p_out:
             drift = (p_out - p_in) / p_in * 100
             pitch_str = f"{p_in:6.0f}->{p_out:6.0f}Hz  {drift:+.2f}%"
         else:
             pitch_str = "(基频不稳定，跳过)"
 
-        print(f"{k:<18}{len(src_wav)/1024:7.0f}KB{len(pcm_wav)/1024:6.0f}KB"
-              f"{len(pcm_wav)/len(src_wav)*100:5.0f}%   {pitch_str}")
+        print(f"{k:<18}{len(src_wav)/1024:7.0f}KB{len(m4a)/1024:6.0f}KB"
+              f"{len(m4a)/len(src_wav)*100:5.0f}%   {pitch_str}")
 
     OUT.write_text(json.dumps(out), encoding="utf-8")
     print("-" * 64)
-    print(f"源 WAV 合计 {total_in/1024:.0f}KB -> PCM WAV {total_out/1024:.0f}KB "
+    print(f"源 WAV 合计 {total_in/1024:.0f}KB -> M4A/AAC {total_out/1024:.0f}KB "
           f"({total_out/total_in*100:.0f}%)")
     print(f"audio-data.json (base64): {OUT.stat().st_size/1024:.0f}KB")
 

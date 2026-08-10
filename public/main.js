@@ -1465,7 +1465,7 @@ function b64ToArrayBuffer(b64) {
 let audioB64Promise = null;
 function ensureAudioB64() {
   if (!audioB64Promise) {
-    audioB64Promise = fetch('audio-data.json?v=20260810-wav', { cache: 'force-cache' })
+    audioB64Promise = fetch('audio-data.json?v=20260810-m4a', { cache: 'force-cache' })
       .then((r) => {
         if (!r.ok) throw new Error(`audio-data.json HTTP ${r.status}`);
         return r.json();
