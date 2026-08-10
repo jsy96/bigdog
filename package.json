@@ -1,6 +1,6 @@
 {
   "name": "dagou-tap",
-  "version": "1.0.0",
+  "version": "1.0.260810-atlas",
   "private": true,
   "description": "Dagou Tap - interactive rhythm toy (Mikutap-style)",
   "engines": {
