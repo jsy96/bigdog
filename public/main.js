@@ -1453,6 +1453,24 @@ function initAudio() {
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
 
+function primeAudioOutputForIOS() {
+  if (!ctx) return;
+  try {
+    const source = ctx.createBufferSource();
+    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+    const now = ctx.currentTime || 0;
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => {
+      try { source.disconnect(); } catch (_) { /* 节点可能已断开 */ }
+    };
+    source.start(now);
+    source.stop(now + 0.01);
+  } catch (error) {
+    console.warn('[大狗Tap] iOS 音频通道预解锁失败。', error);
+  }
+}
+
 function b64ToArrayBuffer(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -3371,6 +3389,24 @@ stage.addEventListener('pointerdown', (e) => {
   );
 }, { passive: false });
 
+function shouldIgnoreStartFallback(event) {
+  const target = event.target;
+  return Boolean(
+    target &&
+    target.closest &&
+    target.closest('button, input, label, textarea, select, #custom-character-modal')
+  );
+}
+
+function startFromFallbackGesture(event) {
+  if ((started && buffers.da) || shouldIgnoreStartFallback(event)) return;
+  hideControlsUntilIdle();
+  start();
+}
+
+stage.addEventListener('touchstart', startFromFallbackGesture, { passive: true });
+stage.addEventListener('click', startFromFallbackGesture);
+
 stage.addEventListener('pointermove', (e) => {
   if (!pointers.has(e.pointerId)) return;
   if (!started || !buffers.da) return;
@@ -3474,9 +3510,10 @@ async function start() {
   try {
     // 正式 AudioContext 必须在用户手势内创建（iOS 严格要求，否则即使 resume 也静音）。
     initAudio();
-    // resume 必须在用户手势的同步调用段内触发（iOS 严格要求），先于任何 await。
-    // 先立刻发起 promise，再等待样本解码；若 iOS 挂起也有超时兜底，不会永久加载。
+    // resume 和一次真实 source.start() 都必须在用户手势的同步调用段内触发。
+    // 仅 resume 在部分 iOS WebKit / 内嵌浏览器里仍可能保持静音，先用 1 帧静音 buffer 暖机。
     const resumePromise = resumeAudioContext('AudioContext.resume');
+    primeAudioOutputForIOS();
     // 并行/串行解码样本：iOS WebKit 串行，其他浏览器并行。
     await loadSamples();
     await resumePromise;
