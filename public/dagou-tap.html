@@ -184,6 +184,8 @@
     opacity: 1;
     transform: translateY(0);
     transition: opacity .5s ease, transform .5s cubic-bezier(.2, .8, .2, 1);
+    flex-wrap: wrap;
+    width: 100%;
   }
   .control-group {
     display: flex;
@@ -193,22 +195,23 @@
      按钮本体背景充当“描边色”，::before 用缩小一号的同款切角多边形铺底色，
      描边因此能严格贴合切角（普通 border 做不到），颜色用变量一键切换 */
   .control-button {
-    --btn-edge: rgba(135, 131, 126, .72);   /* 描边色 */
-    --btn-fill: rgba(255, 242, 220, .92);   /* 底色 */
+    --btn-edge: rgba(96, 91, 84, .92);      /* 描边色（加深，更明显） */
+    --btn-fill: #fff7e6;                     /* 底色（实心暖白，对比度更高） */
     position: relative;
-    min-width: 68px;
-    min-height: 44px;
-    padding: 8px 12px;
+    flex: 0 1 auto;
+    min-width: 104px;
+    min-height: 48px;
+    padding: 9px 12px;
     border: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    color: var(--gray);
+    color: #5c574f;
     background: var(--btn-edge);
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-                       calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
-    font: 700 13px/1 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    clip-path: polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% calc(100% - 11px),
+                       calc(100% - 11px) 100%, 11px 100%, 0 calc(100% - 11px), 0 11px);
+    font: 800 14px/1 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
     cursor: pointer;
     pointer-events: auto;
     touch-action: manipulation;
@@ -221,9 +224,9 @@
     position: absolute;
     inset: 2px;
     z-index: -1;
-    background: var(--btn-fill);
-    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-                       calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+    background: linear-gradient(180deg, #fffefa, var(--btn-fill) 65%);
+    clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px),
+                       calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
     transition: background .2s ease;
   }
   /* 律动缩放由 JS 使用 Web Audio 时钟逐帧写入，避免切换静音时相位重置 */
@@ -237,8 +240,8 @@
     .control-button:hover { --btn-edge: rgba(255, 180, 0, .85); }
   }
   .control-button svg {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     overflow: visible;
     fill: none;
     stroke: currentColor;
@@ -246,10 +249,10 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  /* 顶部音效按钮里的角色小图（替代 svg 图标）：与 svg 同尺寸、同投影手感。 */
+  /* 顶部形象按钮里的角色小图（替代 svg 图标）：与 svg 同尺寸、同投影手感。 */
   .control-button img {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     object-fit: contain;
     filter: drop-shadow(0 2px 3px rgba(135, 131, 126, .35));
   }
@@ -271,8 +274,8 @@
     --btn-fill: rgba(255, 244, 224, .94);
     color: #b57e00;
   }
-  /* 顶部「+」添加自定义形象按钮：比常规按钮窄，单独成按钮。 */
-  .character-add-button { min-width: 44px; padding: 8px 10px; }
+  /* 顶部「+」添加自定义形象按钮：带「添加」文字，与其它按钮等宽。 */
+  .character-add-button { padding-inline: 10px; }
   /* 自定义形象编辑弹层（与 #toy-notice 同风格：写死 HTML + CSS + main.js 逻辑）。 */
   #custom-character-modal {
     position: fixed; inset: 0; z-index: 60;
@@ -383,20 +386,26 @@
     color: #9e4145;
     border-color: rgba(255, 90, 95, .72);
   }
+  /* 窄屏：按钮换行成两行（每行 3 个），文字标签始终保留，触摸目标加大 */
+  @media (max-width: 720px) {
+    .control-button {
+      flex: 1 1 0;
+      min-width: 92px;
+      min-height: 50px;
+      padding: 9px 6px;
+      font-size: 13px;
+      gap: 5px;
+    }
+    .control-button svg { width: 22px; height: 22px; }
+    .control-button img { width: 24px; height: 24px; }
+  }
   @media (max-width: 430px) {
     #top-controls {
       top: max(10px, env(safe-area-inset-top));
       left: max(10px, env(safe-area-inset-left));
       right: max(10px, env(safe-area-inset-right));
     }
-    .control-button {
-      min-width: 44px;
-      padding-inline: 10px;
-    }
-    .control-button span { display: none; }
-    /* 音效选择按钮保留音效名（关键状态），不随其他按钮收成纯图标。 */
-    .control-button.sfx-set-button span,
-    .control-button.character-set-button span { display: inline; }
+    .control-button { font-size: 12.5px; min-width: 84px; }
   }
 
   /* 开始遮罩（首次点击解锁音频） */
@@ -447,7 +456,7 @@
 </style>
 </head>
 <body>
-  <div class="version-tag" aria-hidden="true">v1.0.260811-ios4</div>
+  <div class="version-tag" aria-hidden="true">v1.0.260812-ui1</div>
   <div id="stage">
     <canvas id="fx"></canvas>
     <div id="key-grid" aria-hidden="true"></div>
@@ -485,11 +494,13 @@
         </button>
         <button id="character-set-toggle" class="control-button character-set-button" type="button" aria-label="切换形象，当前哈基米">
           <img id="character-set-icon" class="character-set-icon" src="Image/maodie_close_mouth.webp" alt="" draggable="false" />
+          <span>形象</span>
         </button>
         <button id="character-add-toggle" class="control-button character-add-button" type="button" aria-label="添加自定义形象">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
+          <span>添加</span>
         </button>
         <button id="piano-mode-toggle" class="control-button perf-toggle" type="button" role="switch" aria-checked="false" data-setting="pianoMode" aria-label="钢琴模式" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true">
