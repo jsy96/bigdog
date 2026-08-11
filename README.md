@@ -2,7 +2,7 @@
 
 > 项目根入口现在按域名分流：`https://www.leige.site/` 访问「爱玩的老人主页」`public/index.html`；`https://bigdog.leige.site/` 访问原仿 Mikutap 的「大狗 Tap」互动音乐玩具 `public/dagou-tap.html`。
 
-前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`scripts/server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。本地访问根路径 `/` 会打开老人主页；线上 Vercel 通过 Host 分流：`www.leige.site` 的 `/` 打开老人主页，`bigdog.leige.site` 的 `/` 打开大狗 Tap。大狗 Tap 页面点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
+前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`scripts/server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。本地访问根路径 `/` 会打开老人主页；线上 Vercel 通过 Host 分流：`www.leige.site` 的 `/` 打开老人主页，`bigdog.leige.site` 的 `/` 打开大狗 Tap。老人主页导航包含 `https://baji.leige.site/` 外部入口。大狗 Tap 页面点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
 
 > 后端负责静态文件服务、扫描 `Image/` 目录生成形象清单、自定义形象上传（本地落盘 `Image/`，Vercel 落 Vercel Blob）；演奏设置与当前形象选择仍用浏览器 `localStorage` 本地持久化。
 
