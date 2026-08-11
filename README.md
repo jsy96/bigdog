@@ -8,6 +8,7 @@
 
 ## 功能特性
 
+- **老人主页形象切换**（`index.html`）：头像区是一个形象选择器，内置 6 个形象——静态 3 个（大狗 / 哈基米 / 叮咚鸡，定时张嘴 + 点击张嘴）与动画 3 个（帝皇 / 豆包 / 豆包二号，用精灵图 `background-position` 逐帧播放）。默认大狗，选择写入 `localStorage` 键 `dagou-selected-character-v1`，与「大狗 Tap」页面**联动**（在主页选好的形象，进 Tap 页直接是它）。动画形象 atlas 切换走 `new Image()` 预载，下载完才淡入，避免闪白；精灵图用 `background-size:1200% 900%`（12 列 × 9 行）+ 百分比定位，容器只须保持 `360/514` 比例，不依赖具体像素。
 - **节拍吸附**：输入量化到八分音符；快速滑动会补全线段跨过的所有分区并按顺序排队，同类音节只保留最新一个。
 - **三套音色**（语义音节 `da / gou / jiao` 映射到不同采样），全部直接可用：
   - 大狗叫：`da / gou / jiao`
@@ -29,7 +30,7 @@
 
 ```
 public/                 前端静态站点根（Vercel 标准静态目录；本地 server 也从此目录服务）
-  index.html            爱玩的老人主页入口（www.leige.site 根路径访问）
+  index.html            爱玩的老人主页入口（www.leige.site 根路径访问）；含形象切换器，默认大狗，选择与 Tap 页联动
   dagou-tap.html        原大狗 Tap 互动音乐玩具页面（bigdog.leige.site 根路径访问，引用 main.js）
   main.js               核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
   audio-data.json       九段音效的 m4a/AAC base64 包（mono/32kHz/AAC-LC/96kbps；前端 fetch 异步加载；由 scripts/build-audio-data-json.py 从 audio-data.js 转换，~53KB）
