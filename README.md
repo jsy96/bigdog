@@ -1,8 +1,8 @@
 # 爱玩的老人主页 / 大狗 Tap
 
-> 项目根入口现在是一个「爱玩的老人主页」：用轻松、童趣的视觉介绍老顽童的爱玩日常，并提供外部链接 `https://bigdog.leige.site/`。原仿 Mikutap 的「大狗 Tap」互动音乐玩具已保留为 `public/dagou-tap.html`。
+> 项目根入口现在按域名分流：`https://www.leige.site/` 访问「爱玩的老人主页」`public/index.html`；`https://bigdog.leige.site/` 访问原仿 Mikutap 的「大狗 Tap」互动音乐玩具 `public/dagou-tap.html`。
 
-前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`scripts/server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。访问根路径 `/` 会打开老人主页；点击主页里的「玩一把大狗 Tap」可进入 `dagou-tap.html`，点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
+前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`scripts/server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。本地访问根路径 `/` 会打开老人主页；线上 Vercel 通过 Host 分流：`www.leige.site` 的 `/` 打开老人主页，`bigdog.leige.site` 的 `/` 打开大狗 Tap。大狗 Tap 页面点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
 
 > 后端负责静态文件服务、扫描 `Image/` 目录生成形象清单、自定义形象上传（本地落盘 `Image/`，Vercel 落 Vercel Blob）；演奏设置与当前形象选择仍用浏览器 `localStorage` 本地持久化。
 
@@ -29,8 +29,8 @@
 
 ```
 public/                 前端静态站点根（Vercel 标准静态目录；本地 server 也从此目录服务）
-  index.html            爱玩的老人主页入口（含样式与外链 https://bigdog.leige.site/）
-  dagou-tap.html        原大狗 Tap 互动音乐玩具页面（由主页进入，引用 main.js）
+  index.html            爱玩的老人主页入口（www.leige.site 根路径访问）
+  dagou-tap.html        原大狗 Tap 互动音乐玩具页面（bigdog.leige.site 根路径访问，引用 main.js）
   main.js               核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
   audio-data.json       九段音效的 m4a/AAC base64 包（mono/32kHz/AAC-LC/96kbps；前端 fetch 异步加载；由 scripts/build-audio-data-json.py 从 audio-data.js 转换，~53KB）
   audio-data.js         同一份数据的 JS 源（convert 输入；已 .vercelignore，不上传到 Vercel）
@@ -65,7 +65,7 @@ tools/                     开发与验证工具，不参与网页运行（已 .
   verify_interaction_queue.mjs 验证滑动补全、节奏排队与长音换调
 start.bat               Windows 启动脚本（英文输出，跑 scripts/server.js）
 提示词.txt                AI 绘图提示词：照此生成符合要求的"闭嘴/张嘴"双图，用于自定义形象
-vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles + 静态资源长期缓存头）
+vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles + 根路径按 Host 分流 + 静态资源长期缓存头）
 package.json            npm 依赖（@vercel/blob）与脚本（build / dev）；不含 start 脚本，避免 Vercel 误判为 Node server
 .vercelignore           Vercel 上传排除清单（tools/、audio/、docs/、本地脚本），减小部署体积
 README.md               项目说明（本文件）
@@ -92,7 +92,7 @@ PORT=8011 node scripts/server.js
 
 ## 部署到 Vercel
 
-本项目可一键部署到 Vercel：`public/` 下的静态前端（`index.html` / `main.js` / `audio-data.js` / `Image`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。
+本项目可一键部署到 Vercel：`public/` 下的静态前端（`index.html` / `dagou-tap.html` / `main.js` / `audio-data.js` / `Image`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。`vercel.json` 会按访问域名把根路径 `/` 分流到不同 HTML。
 
 ### 与本地部署的差异
 
@@ -104,6 +104,15 @@ PORT=8011 node scripts/server.js
 | 形象 API 实现 | `server.js` 内联 | `api/characters.js` / `api/characters/[id].js` |
 
 API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
+
+### 域名分流
+
+`vercel.json` 通过根路径 `/` 的 Host 条件 rewrite 做两个主页入口：
+
+- `https://www.leige.site/` → `public/index.html`（老人主页）
+- `https://bigdog.leige.site/` → `public/dagou-tap.html`（大狗 Tap）
+
+在 Vercel 项目设置里需要同时绑定 `www.leige.site` 和 `bigdog.leige.site` 两个域名；部署后，两个域名都访问根路径 `/`，由 Vercel 按 Host 自动分发到对应 HTML。
 
 ### 部署步骤
 
