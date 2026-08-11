@@ -92,7 +92,7 @@ PORT=8011 node scripts/server.js
 
 ## 部署到 Vercel
 
-本项目可一键部署到 Vercel：`public/` 下的静态前端（`index.html` / `dagou-tap.html` / `main.js` / `audio-data.js` / `Image`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。`vercel.json` 会按访问域名把根路径 `/` 分流到不同 HTML。
+本项目可一键部署到 Vercel：`public/` 下的静态前端（`index.html` / `dagou-tap.html` / `main.js` / `audio-data.js` / `Image`）走 Vercel 静态 CDN，API 由 `api/` 下的 Serverless Functions 提供。`vercel.json` 使用显式 `routes`，在静态文件系统命中前按访问域名把根路径 `/` 分流到不同 HTML。
 
 ### 与本地部署的差异
 
@@ -107,7 +107,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 
 ### 域名分流
 
-`vercel.json` 通过根路径 `/` 的 Host 条件 rewrite 做两个主页入口：
+`vercel.json` 通过根路径 `/` 的 Host 条件 `routes` 做两个主页入口，避免 Vercel 先命中静态 `index.html`：
 
 - `https://www.leige.site/` → `public/index.html`（老人主页）
 - `https://bigdog.leige.site/` → `public/dagou-tap.html`（大狗 Tap）

@@ -8,64 +8,56 @@
       "includeFiles": "data/**"
     }
   },
-  "headers": [
+  "routes": [
     {
-      "source": "/Image/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/audio-data.json",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/",
+      "src": "/",
       "has": [
         {
           "type": "host",
           "value": "bigdog.leige.site"
         }
       ],
-      "destination": "/dagou-tap.html"
+      "dest": "/dagou-tap.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate"
+      }
     },
     {
-      "source": "/",
+      "src": "/",
       "has": [
         {
           "type": "host",
           "value": "www.leige.site"
         }
       ],
-      "destination": "/index.html"
+      "dest": "/index.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate"
+      }
+    },
+    {
+      "src": "/Image/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "/(.*).js",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "/audio-data.json",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
