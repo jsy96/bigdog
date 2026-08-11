@@ -1572,8 +1572,28 @@ function clearDecodedSamples() {
 }
 
 async function resumeAudioContext(label = 'AudioContext.resume') {
+  if (!ctx || ctx.state !== 'suspended') return true;
+  try {
+    await waitWithTimeout(ctx.resume(), 1800, label);
+    return true;
+  } catch (error) {
+    // iOS WebKit 偶尔会让 resume() 的 promise 长时间不 settle，但同一手势里
+    // 启动静音 source 后音频通道可能已经被放行；这里不能把启动流程判死。
+    console.warn('[大狗Tap] AudioContext resume 未及时完成，保留上下文并等待后续手势重试。', error);
+    return false;
+  }
+}
+
+function nudgeAudioContextFromGesture() {
   if (!ctx || ctx.state !== 'suspended') return;
-  await waitWithTimeout(ctx.resume(), 1800, label);
+  try {
+    void ctx.resume().catch((error) => {
+      console.warn('[大狗Tap] 后续手势恢复 AudioContext 失败。', error);
+    });
+  } catch (error) {
+    console.warn('[大狗Tap] 后续手势恢复 AudioContext 抛错。', error);
+  }
+  primeAudioOutputForIOS();
 }
 
 async function closeAudioContextQuietly() {
@@ -3376,6 +3396,7 @@ function tryActivate(pointerId, x, y, state) {
 
 stage.addEventListener('pointerdown', (e) => {
   e.preventDefault();
+  nudgeAudioContextFromGesture();
   if (!started || !buffers.da) {
     pointers.set(e.pointerId, createInputState(e.clientX, e.clientY));
     hideControlsUntilIdle();
@@ -3399,7 +3420,9 @@ function shouldIgnoreStartFallback(event) {
 }
 
 function startFromFallbackGesture(event) {
-  if ((started && buffers.da) || shouldIgnoreStartFallback(event)) return;
+  if (shouldIgnoreStartFallback(event)) return;
+  nudgeAudioContextFromGesture();
+  if (started && buffers.da) return;
   hideControlsUntilIdle();
   start();
 }
@@ -3516,7 +3539,10 @@ async function start() {
     primeAudioOutputForIOS();
     // 并行/串行解码样本：iOS WebKit 串行，其他浏览器并行。
     await loadSamples();
-    await resumePromise;
+    const resumed = await resumePromise;
+    if (!resumed && ctx && ctx.state === 'suspended') {
+      showToyNotice('音频已加载；若仍无声，请再点一次屏幕并确认 iPhone 媒体音量已打开。');
+    }
 
     startTime = ctx.currentTime + 0.12;
     nextNoteTime = startTime;
