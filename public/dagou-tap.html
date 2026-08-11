@@ -274,6 +274,43 @@
     --btn-fill: rgba(255, 244, 224, .94);
     color: #b57e00;
   }
+  /* 主按钮：音乐 / 音效 / 形象 —— 琥珀填充 + 白字，比次要按钮更显眼。
+     次要按钮（添加 / 钢琴 / 八度）保持默认的白底灰描边。主/次同高，
+     只靠填充色区分，避免一行内高度不齐。 */
+  .control-button.is-primary {
+    --btn-edge: rgba(255, 160, 0, .95);
+    --btn-fill: #ffb400;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(160, 100, 0, .4);
+  }
+  .control-button.is-primary::before {
+    background: linear-gradient(180deg, #ffcf52 0%, #ffb400 55%, #f59e00 100%);
+  }
+  /* 形象按钮的角色头像：白圆衬底，做成一枚徽章，琥珀底上更清晰 */
+  .control-button.is-primary img {
+    background: #fff;
+    border-radius: 50%;
+    padding: 2px;
+  }
+  .control-button.is-primary svg {
+    filter: drop-shadow(0 1px 2px rgba(150, 90, 0, .45));
+  }
+  @media (hover: hover) {
+    .control-button.is-primary:hover { --btn-edge: rgba(255, 160, 0, 1); }
+    .control-button.is-primary:hover::before {
+      background: linear-gradient(180deg, #ffdb74 0%, #ffc220 55%, #ffae00 100%);
+    }
+  }
+  /* 主按钮静音态（音乐关 / 音效关）：珊瑚红填充 + 白字，覆盖默认琥珀 */
+  .control-button.is-primary.is-muted {
+    --btn-edge: rgba(229, 60, 65, .95);
+    color: #fff;
+  }
+  .control-button.is-primary.is-muted::before {
+    background: linear-gradient(180deg, #ff8e91 0%, #ff5a5f 55%, #e84549 100%);
+  }
+  .control-button.is-primary.is-muted .mute-slash { stroke: #fff; }
+
   /* 顶部「+」添加自定义形象按钮：带「添加」文字，与其它按钮等宽。 */
   .character-add-button { padding-inline: 10px; }
   /* 自定义形象编辑弹层（与 #toy-notice 同风格：写死 HTML + CSS + main.js 逻辑）。 */
@@ -475,7 +512,7 @@
 
     <div id="top-controls" class="is-visible" aria-label="声音控制">
       <div id="audio-controls" class="control-group">
-        <button id="music-toggle" class="control-button" type="button" aria-label="关闭音乐" aria-pressed="false">
+        <button id="music-toggle" class="control-button is-primary" type="button" aria-label="关闭音乐" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 18V5l10-2v13" />
             <circle cx="6" cy="18" r="3" />
@@ -484,7 +521,7 @@
           </svg>
           <span>音乐</span>
         </button>
-        <button id="sfx-set-toggle" class="control-button sfx-set-button" type="button" aria-label="切换音效，当前 ha-ji-mi">
+        <button id="sfx-set-toggle" class="control-button is-primary sfx-set-button" type="button" aria-label="切换音效，当前 ha-ji-mi">
           <svg id="sfx-set-mute-icon" class="sfx-set-mute-icon" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
             <path d="M5 9v6h4l5 4V5L9 9H5z" />
             <path d="M17 9.5a4 4 0 010 5" />
@@ -492,7 +529,7 @@
           </svg>
           <span id="sfx-set-label">ha-ji-mi</span>
         </button>
-        <button id="character-set-toggle" class="control-button character-set-button" type="button" aria-label="切换形象，当前哈基米">
+        <button id="character-set-toggle" class="control-button is-primary character-set-button" type="button" aria-label="切换形象，当前哈基米">
           <img id="character-set-icon" class="character-set-icon" src="Image/maodie_close_mouth.webp" alt="" draggable="false" />
           <span>形象</span>
         </button>
