@@ -1,8 +1,8 @@
-# 大狗 Tap（Dagou-Tap）
+# 爱玩的老人主页 / 大狗 Tap
 
-> 仿 Mikutap 的网页互动音乐玩具：点击 / 滑动屏幕，狗叫声会卡在节拍上，全屏几何特效随拍绽放。
+> 项目根入口现在是一个「爱玩的老人主页」：用轻松、童趣的视觉介绍老顽童的爱玩日常，并提供外部链接 `https://bigdog.leige.site/`。原仿 Mikutap 的「大狗 Tap」互动音乐玩具已保留为 `public/dagou-tap.html`。
 
-前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
+前后端一体的网页应用，支持两种部署方式：**本地 Node 服务器**（`scripts/server.js`，零依赖）或 **Vercel**（自定义形象存 Vercel Blob）。访问根路径 `/` 会打开老人主页；点击主页里的「玩一把大狗 Tap」可进入 `dagou-tap.html`，点按或拖动屏幕任意位置即可触发音效——三套音色（大狗叫 / 哈基米 / 叮咚鸡）的每个分区都被对准 A 小调五声音阶的固定音高，配合 128 BPM 的 C–G–Am–F 背景循环，自由演奏也不会刺耳。
 
 > 后端负责静态文件服务、扫描 `Image/` 目录生成形象清单、自定义形象上传（本地落盘 `Image/`，Vercel 落 Vercel Blob）；演奏设置与当前形象选择仍用浏览器 `localStorage` 本地持久化。
 
@@ -23,13 +23,14 @@
 - **演奏设置**：顶部有「钢琴」开关按钮和「八度」循环按钮（点击在 C3–C6 间切换，钢琴模式与起始八度保存在 `localStorage`）；强化节奏、显示网格固定开启、不可关闭。
 - **键盘控制**：钢琴模式下用键盘行（QWE…/ASD…/ZXC…）弹奏，方向键 ←/→ 切换八度。
 - 全屏几何特效（12 种）、节拍律动、张嘴动画、按键网格显示。
-- **版本标识**：界面右下角低调显示当前版本号 `v1.0.260811-ios3`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/index.html` 里 `.version-tag` 的文本）。
+- **版本标识**：大狗 Tap 页面右下角低调显示当前版本号 `v1.0.260811-ios4`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/dagou-tap.html` 里 `.version-tag` 的文本）。
 
 ## 目录结构
 
 ```
 public/                 前端静态站点根（Vercel 标准静态目录；本地 server 也从此目录服务）
-  index.html            入口页面（含全部样式与 DOM）
+  index.html            爱玩的老人主页入口（含样式与外链 https://bigdog.leige.site/）
+  dagou-tap.html        原大狗 Tap 互动音乐玩具页面（由主页进入，引用 main.js）
   main.js               核心前端逻辑：Web Audio 音频引擎、特效、交互、设置、形象上传
   audio-data.json       九段音效的 m4a/AAC base64 包（mono/32kHz/AAC-LC/96kbps；前端 fetch 异步加载；由 scripts/build-audio-data-json.py 从 audio-data.js 转换，~53KB）
   audio-data.js         同一份数据的 JS 源（convert 输入；已 .vercelignore，不上传到 Vercel）
@@ -166,7 +167,7 @@ Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使�
 ## 技术要点
 
 - **音高变调**：用逐帧 YIN 检测每段原始语音的参考基频，再通过 Web Audio 的 `AudioBufferSourceNode.playbackRate` 把每个按键固定对准 **A 小调五声音阶（A–C–D–E–G）** 的某个音；同一按键在任何时间、任何背景下倍率完全一致。详见 `docs/audio-pitch-harmony.md`。
-- **iOS 音频启动**：`audio-data.json` 仍使用 iOS 友好的 m4a/AAC 包；`AudioContext` 只在首次 `pointerdown` 手势内创建，并在同一个同步手势调用段内立即 `resume()` + 启动 1 帧静音 `AudioBufferSourceNode`，解决部分 iOS Safari / 内嵌 WebView 只 `resume()` 仍静音的问题；不支持 `PointerEvent` 的旧 WebView 才启用 `touchstart` / `click` 启动兜底，避免现代 iOS 双启动。若 `resume()` 超时且上下文仍是 `suspended`，会清理旧 `AudioContext` 并回到可重试状态，下一次点击重新创建上下文，避免把音效排进不运行的音频时钟。iOS WebKit 上音效样本改为串行 `decodeAudioData`，每个解码带超时兜底；若 WebKit 偶发不回调，会显示可重试错误并清理旧 `AudioContext`，不会永久停在「狗叫加载中」。
+- **iOS 音频启动**：`audio-data.json` 仍使用 iOS 友好的 m4a/AAC 包；安卓/桌面首次启动仍走 `pointerdown`，iOS WebKit 首次启动改走 `touchend`，避免 `pointerdown + preventDefault()` 影响 Web Audio 手势解锁。`AudioContext` 在同一个同步手势调用段内先启动 60ms 近静音 `AudioBufferSourceNode`，再立即 `resume()`；不支持 `PointerEvent` 的旧 WebView 才启用 `touchstart` / `click` 启动兜底。若 `resume()` 超时且上下文仍是 `suspended`，会清理旧 `AudioContext` 并回到可重试状态，下一次点击重新创建上下文，避免把音效排进不运行的音频时钟。iOS WebKit 上音效样本改为串行 `decodeAudioData`，每个解码带超时兜底；若 WebKit 偶发不回调，会显示可重试错误并清理旧 `AudioContext`，不会永久停在「狗叫加载中」。
 - **响度校准**：以 `da.wav` 的有效帧 RMS 为基准，为九段音频分别计算固定增益，叠加结果再经 `DynamicsCompressorNode` 防削波。
 - **形象加载**：前端启动时请求 `/api/characters`，由后端扫描 `Image/` 生成清单；后端不可用时回退到内置形象，方便直接打开页面做基础演奏。
 - **本地存储**：演奏设置通过一个本地适配器（`localToyAdapter`）以 `localStorage` 持久化，键名沿用历史命名；当前形象选择使用 `dagou-selected-character-v1`，自定义图片本身由后端保存在 `Image/`。

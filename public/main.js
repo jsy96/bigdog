@@ -1456,16 +1456,22 @@ function initAudio() {
 function primeAudioOutputForIOS() {
   if (!ctx) return;
   try {
+    const gain = ctx.createGain();
     const source = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+    const sampleRate = ctx.sampleRate || 44100;
+    const duration = 0.06;
+    const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(sampleRate * duration)), sampleRate);
     const now = ctx.currentTime || 0;
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.00001, now);
+    source.connect(gain);
+    gain.connect(ctx.destination);
     source.onended = () => {
       try { source.disconnect(); } catch (_) { /* 节点可能已断开 */ }
+      try { gain.disconnect(); } catch (_) { /* 节点可能已断开 */ }
     };
     source.start(now);
-    source.stop(now + 0.01);
+    source.stop(now + duration);
   } catch (error) {
     console.warn('[大狗Tap] iOS 音频通道预解锁失败。', error);
   }
@@ -3383,11 +3389,12 @@ function tryActivate(pointerId, x, y, state) {
 }
 
 stage.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+  const deferStartToIOSTouchEnd = isLikelyIOSWebKit() && (!started || !buffers.da);
+  if (!deferStartToIOSTouchEnd) e.preventDefault();
   if (!started || !buffers.da) {
     pointers.set(e.pointerId, createInputState(e.clientX, e.clientY));
     hideControlsUntilIdle();
-    start();
+    if (!deferStartToIOSTouchEnd) start();
     return;
   }
   try { stage.setPointerCapture(e.pointerId); } catch (_) { /* 某些旧浏览器不支持 */ }
@@ -3411,6 +3418,15 @@ function startFromLegacyTouchGesture(event) {
   hideControlsUntilIdle();
   start();
 }
+
+function startFromIOSTouchEnd(event) {
+  if (!isLikelyIOSWebKit() || (started && buffers.da) || shouldIgnoreStartFallback(event)) return;
+  event.preventDefault();
+  hideControlsUntilIdle();
+  start();
+}
+
+stage.addEventListener('touchend', startFromIOSTouchEnd, { passive: false });
 
 if (!window.PointerEvent) {
   stage.addEventListener('touchstart', startFromLegacyTouchGesture, { passive: true });
@@ -3520,10 +3536,10 @@ async function start() {
   try {
     // 正式 AudioContext 必须在用户手势内创建（iOS 严格要求，否则即使 resume 也静音）。
     initAudio();
-    // resume 和一次真实 source.start() 都必须在用户手势的同步调用段内触发。
-    // 仅 resume 在部分 iOS WebKit / 内嵌浏览器里仍可能保持静音，先用 1 帧静音 buffer 暖机。
-    const resumePromise = resumeAudioContext('AudioContext.resume');
+    // 一次真实 source.start() 和 resume 都必须在用户手势的同步调用段内触发。
+    // iOS 先看到可播放节点再 resume 更稳，避免只 resume 时上下文仍保持 suspended。
     primeAudioOutputForIOS();
+    const resumePromise = resumeAudioContext('AudioContext.resume');
     // 并行/串行解码样本：iOS WebKit 串行，其他浏览器并行。
     await loadSamples();
     const resumed = await resumePromise;
