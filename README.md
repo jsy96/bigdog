@@ -24,7 +24,7 @@
 - **演奏设置**：顶部有「钢琴」开关按钮和「八度」循环按钮（点击在 C3–C6 间切换，钢琴模式与起始八度保存在 `localStorage`）；强化节奏、显示网格固定开启、不可关闭。
 - **键盘控制**：钢琴模式下用键盘行（QWE…/ASD…/ZXC…）弹奏，方向键 ←/→ 切换八度。
 - 全屏几何特效（12 种）、节拍律动、张嘴动画、按键网格显示。
-- **版本标识**：大狗 Tap 页面右下角低调显示当前版本号 `v1.0.260812-ui1`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/dagou-tap.html` 里 `.version-tag` 的文本）。
+- **版本标识**：大狗 Tap 页面右下角低调显示当前版本号 `v1.0.260819-ui1`（半透明灰、`pointer-events:none` 不挡互动；改版本直接编辑 `public/dagou-tap.html` 里 `.version-tag` 的文本）。
 - **顶部按钮（明显 + 可读 + 不溢出）**：6 个按钮全部「图标 + 文字标签」（音乐 / ha-ji-mi / 形象 / 添加 / 钢琴 / C4），对比度大幅提高；min-height 48px（窄屏 50px）、图标 24px、字号 14px。窄屏（≤720px）按钮组 `flex-wrap` 自动换行成 3+3 两行，每行 3 个平分宽度，文字标签在所有尺寸都保留，手机上不再溢出或看不懂。**主/次分层**：「音乐 / 音效 / 形象」三个核心按钮为琥珀填充主按钮（`.is-primary`，白字 + 暖橙渐变 + 形象头像白圆徽章），「添加 / 钢琴 / 八度」为白底灰描边次要按钮；主按钮静音态自动变珊瑚红填充白字，钢琴开启态保持琥珀描边淡黄底。主/次同高，只靠填充色分层，一行内不出现高度不齐。
 
 ## 目录结构
@@ -66,6 +66,8 @@ tools/                     开发与验证工具，不参与网页运行（已 .
   verify_runtime_mapping.mjs  提取并执行 main.js 映射函数，对照分析报告回归
   verify_interaction_queue.mjs 验证滑动补全、节奏排队与长音换调
 start.bat               Windows 启动脚本（英文输出，跑 scripts/server.js）
+start.sh                macOS/Linux 启动脚本（与 start.bat 等价：lsof 探测 8000–8099 空闲端口后启动）
+1git.sh                 macOS/Linux 一键提交脚本（与 1git.bat 等价：add -A + commit + push origin main，默认信息 update）
 提示词.txt                AI 绘图提示词：照此生成符合要求的"闭嘴/张嘴"双图，用于自定义形象
 vercel.json             Vercel 部署配置（buildCommand + functions.includeFiles + 根路径按 Host 分流 + 静态资源长期缓存头）
 package.json            npm 依赖（@vercel/blob）与脚本（build / dev）；不含 start 脚本，避免 Vercel 误判为 Node server
@@ -79,8 +81,8 @@ README.md               项目说明（本文件）
 需要 Node.js v18+（只用内置模块，无需 `npm install`）。
 
 ```bash
-# 方式一：Windows 双击 start.bat
-# 如果 8000 被占用，start.bat 会自动尝试 8001、8002 ...，并在窗口里显示实际访问地址。
+# 方式一：Windows 双击 start.bat；macOS/Linux 终端运行 ./start.sh
+# 如果 8000 被占用，脚本会自动尝试 8001、8002 ...（到 8099），并显示实际访问地址。
 
 # 方式二：命令行启动
 node scripts/server.js
@@ -129,7 +131,7 @@ API 路径与返回结构完全一致，前端 `main.js` 无需任何改动。
 - **请求体大小**：Vercel Hobby 计划单个请求体上限约 **4.5 MB**（两张 base64 PNG 合计）。网页已把上传图压缩到约 360px 宽，通常远低于此；若仍超限会收到错误提示，请换更小的图。
 - **构建期排除 `custom_`**：构建脚本跳过 `public/Image/` 里 `custom_` 前缀的图片——自定义形象在线上只来自 Blob，不来自仓库。本地的 `public/Image/custom_*` 测试图不会出现在线上清单。
 - **本地开发仍用 `server.js`**：`npm run dev` 跑本地服务器（写 `Image/`）；Vercel 函数（写 Blob）只在部署后生效。
-- **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat`），减小上传体积；`audio-data.js` 也已排除（前端改用 `audio-data.json`，js 仅作 convert 源）。`scripts/` 必须保留——构建期要跑 build 脚本。
+- **部署体积优化**：`.vercelignore` 排除 `tools/`（含大量临时帧）、`audio/`（源 wav，前端用 base64 内嵌包不引用）、`docs/` 及本地脚本（`server.js` / `start.bat` / `1git.bat` / `start.sh` / `1git.sh`），减小上传体积；`audio-data.js` 也已排除（前端改用 `audio-data.json`，js 仅作 convert 源）。`scripts/` 必须保留——构建期要跑 build 脚本。
 - **首屏性能优化**：① 核心角色图（大狗 / 叮咚鸡 / 哈基米 + 1_1 / 2_2）由 PNG 转 WebP，约 4.9 MB → 310 KB；② 音频存 `audio-data.json`：源 WAV 经 `build-audio-data-json.py` 转成 m4a/AAC-LC（mono/32kHz/96kbps，base64 ~53KB）——iOS Safari 对 WAV 的 `decodeAudioData` 兼容性不稳定、MP3 又偏慢，m4a/AAC 是 iOS 原生更稳格式；`main.js` 页面加载即 `fetch` 异步获取（`<link rel="preload" as="fetch">` 提前发起），`start()` 用户手势内用回调形式 `decodeAudioData` 并行解码，规避 Safari Promise 形式不稳定；AAC 往返音高校验除 `mi` 的 YIN 检测受谐波影响显示 +3.52% 外，其余偏差约 ±0.5% 内，听感若异常可单独调该样本；`main.js` 同样 `preload` 并行下载；③ `vercel.json` 为 `Image/*` 与 `*.js` 设 `immutable` 长缓存（`index.html` 走 `must-revalidate` 保证更新即时生效），二次访问近瞬开；④ **动画图集压缩**：三个动画形象图集（doubao / doubao2 / 帝皇，各 4320×4626 / 108 帧）由 `scripts/compress-atlas.py` 统一重压到 WebP q=60——doubao 系列 6.7 MB → 2.3 MB（省 65%，手机端切到 doubao 形象从下载 3.5 MB 降到 1.1 MB），帝皇原图已是高压缩态、收益小（2.0→1.8 MB）；图集重压后 `main.js` 给 atlas URL 附 `ATLAS_CACHE_BUSTER` 版本号击穿 immutable 旧缓存；⑤ **形象清单 API 缓存**：`GET /api/characters` 由 `no-store` 改为 SWR（`max-age=60, s-maxage=600, stale-while-revalidate=86400`），首屏命中 CDN、不再每次等 Serverless 冷启动，前端 fetch 同步改 `cache: 'default'`。
 
 ## 后端 API
@@ -164,7 +166,7 @@ Image/{id}_icon.webp   # 可选，用作顶部形象按钮图标；没有时使�
 
 内置形象之外，可上传自己的图做成新形象：
 
-1. 通过 `node scripts/server.js` 或 `start.bat` 打开服务，访问 `http://localhost:8000/`。
+1. 通过 `node scripts/server.js`、`start.bat` 或 `./start.sh` 打开服务，访问 `http://localhost:8000/`。
 2. 点击顶部「形象」按钮右侧的「**+**」，打开「添加自定义形象」面板。
 3. 点「闭嘴」槽选一张图、点「张嘴」槽选一张图（两个槽可任意顺序选；保存时会自动把张嘴图对齐到闭嘴图尺寸，保证张嘴动画不跳）。
 4. 点中间预览区可切换查看张嘴效果，确认无误后填名称（≤6 字），点「保存并使用」。
