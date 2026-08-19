@@ -35,6 +35,7 @@ const DEFAULT_PERFORMANCE_SETTINGS = Object.freeze({
 let ctx = null;           // AudioContext
 let master = null;        // 总线增益
 let bgmBus = null;        // 循环音乐总线
+
 let sfxBus = null;        // 狗叫音效总线
 let noiseBuf = null;      // 白噪声（鼓组用）
 let started = false;
@@ -2418,6 +2419,36 @@ function pianoZoneIndexForCode(code) {
   );
 }
 
+/* 数字键 1–8（含小键盘）：两种模式通用，不用修饰键。
+ * 音高档位：钢琴模式 1–8 对应 8 个白键；普通模式 1–4 与 5–8 重复覆盖 4 个分区。
+ * 音节：同一数字键每按一次轮换 大→狗→叫→大…（各键独立计数），
+ * 轮换顺序与字母键盘行一致（PIANO_KEYBOARD_SAMPLES = da / gou / jiao）。 */
+const DIGIT_KEY_RE = /^(?:Digit|Numpad)([1-8])$/;
+const digitRotation = new Map();
+
+function digitPitchTier(code) {
+  const match = DIGIT_KEY_RE.exec(code);
+  if (!match) return -1;
+  const digit = Number(match[1]);
+  return performanceSettings.pianoMode ? digit - 1 : (digit - 1) % 4;
+}
+
+function digitZoneIndexForCode(code) {
+  const tier = digitPitchTier(code);
+  if (tier < 0) return null;
+  const sampleIdx = digitRotation.get(code) ?? 0;
+  const zi = zones.findIndex(
+    zone => zone.sample === PIANO_KEYBOARD_SAMPLES[sampleIdx] && zone.pitchTier === tier
+  );
+  return zi >= 0 ? zi : null;
+}
+
+function advanceDigitRotation(code) {
+  if (digitPitchTier(code) < 0) return;
+  const next = ((digitRotation.get(code) ?? 0) + 1) % PIANO_KEYBOARD_SAMPLES.length;
+  digitRotation.set(code, next);
+}
+
 /* 返回一条指针线段实际穿过的全部格子，避免快速移动时浏览器只上报首尾格。 */
 function zonesAlongSegment(x0, y0, x1, y1) {
   const { width, height, left, top } = getStageMetrics();
@@ -3489,7 +3520,7 @@ function handlePianoKeyDown(event) {
     return;
   }
 
-  const zi = pianoZoneIndexForCode(event.code);
+  const zi = digitZoneIndexForCode(event.code) ?? pianoZoneIndexForCode(event.code);
   if (zi < 0) return;
 
   const inputId = `keyboard:${event.code}`;
@@ -3502,11 +3533,12 @@ function handlePianoKeyDown(event) {
     start();
     return;
   }
+  advanceDigitRotation(event.code);
   beginZoneInput(inputId, zi);
 }
 
 function handlePianoKeyUp(event) {
-  if (!pianoKeyboardBinding(event.code)) return;
+  if (!pianoKeyboardBinding(event.code) && digitPitchTier(event.code) < 0) return;
   const inputId = `keyboard:${event.code}`;
   if (!pointers.has(inputId)) return;
   event.preventDefault();
